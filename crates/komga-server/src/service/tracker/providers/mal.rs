@@ -221,6 +221,7 @@ impl TrackerService for MalTracker {
         user_id: &str,
         query: &str,
         nsfw: bool,
+        _language: Option<&str>,
     ) -> Result<Vec<TrackSearchItem>, TrackerError> {
         if let Some(id) = Self::manga_url_id(query) {
             let details = self
@@ -513,7 +514,7 @@ mod tests {
         assert!(tracker.is_logged_in("alice").unwrap());
 
         let query = "界".repeat(70);
-        let items = tracker.search("alice", &query, true).await.unwrap();
+        let items = tracker.search("alice", &query, true, None).await.unwrap();
         assert_eq!(items.len(), 3);
         assert_eq!(items[0].id, "1");
         assert_eq!(items[0].title, "Detail One");
@@ -535,7 +536,7 @@ mod tests {
         assert_eq!(items[2].title, "Unknown Title");
         assert!(!items[2].tracked);
         assert!(matches!(
-            tracker.search("bob", "Test", true).await,
+            tracker.search("bob", "Test", true, None).await,
             Err(TrackerError::NotLoggedIn {
                 provider: Provider::Mal
             })
@@ -563,7 +564,12 @@ mod tests {
             MalTracker::with_base_url(reqwest::Client::new(), oauth, format!("{base_url}/v2"));
 
         let items = tracker
-            .search("alice", "myanimelist.net/manga/42/Direct_Manga", false)
+            .search(
+                "alice",
+                "myanimelist.net/manga/42/Direct_Manga",
+                false,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(items.len(), 1);

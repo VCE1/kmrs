@@ -403,6 +403,7 @@ impl TrackerService for AniListTracker {
         user_id: &str,
         query: &str,
         nsfw: bool,
+        _language: Option<&str>,
     ) -> Result<Vec<TrackSearchItem>, TrackerError> {
         if let Some(id) = Self::manga_url_id(query) {
             let data = self
@@ -645,7 +646,7 @@ mod tests {
         assert_eq!(tracker.provider(), Provider::Anilist);
         assert!(tracker.is_logged_in("alice").unwrap());
 
-        let items = tracker.search("alice", "Test", false).await.unwrap();
+        let items = tracker.search("alice", "Test", false, None).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0].id, "42");
         assert_eq!(items[0].title, "Test Manga");
@@ -661,13 +662,13 @@ mod tests {
         assert!(items[0].tracked);
         assert_eq!(items[0].url.as_deref(), Some("https://anilist.co/manga/42"));
 
-        tracker.search("alice", "Test", true).await.unwrap();
+        tracker.search("alice", "Test", true, None).await.unwrap();
         tracker
-            .search("alice", "anilist.co/manga/42/Test_Manga", true)
+            .search("alice", "anilist.co/manga/42/Test_Manga", true, None)
             .await
             .unwrap();
         assert!(matches!(
-            tracker.search("bob", "Test", true).await,
+            tracker.search("bob", "Test", true, None).await,
             Err(TrackerError::NotLoggedIn {
                 provider: Provider::Anilist
             })
@@ -969,7 +970,7 @@ mod tests {
             oauth,
             format!("{base_url}/graphql"),
         );
-        tracker.search("alice", "Test", false).await.unwrap();
+        tracker.search("alice", "Test", false, None).await.unwrap();
 
         let requests = mock.requests();
         assert_eq!(requests.len(), 3);

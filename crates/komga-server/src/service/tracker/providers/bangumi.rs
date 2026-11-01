@@ -330,6 +330,7 @@ impl TrackerService for BangumiTracker {
         user_id: &str,
         query: &str,
         nsfw: bool,
+        _language: Option<&str>,
     ) -> Result<Vec<TrackSearchItem>, TrackerError> {
         if let Some(id) = Self::subject_url_id(query) {
             let subject = self.subject(user_id, id).await?;
@@ -611,7 +612,7 @@ mod tests {
         assert_eq!(service.provider(), Provider::Bangumi);
         assert!(service.is_logged_in("alice").unwrap());
 
-        let results = service.search("alice", "Book", false).await.unwrap();
+        let results = service.search("alice", "Book", false, None).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, "101");
         assert_eq!(results[0].title, "书籍");
@@ -656,7 +657,7 @@ mod tests {
         let service = test_service(&origin);
 
         assert!(matches!(
-            service.search("alice", "标题 / A", true).await,
+            service.search("alice", "标题 / A", true, None).await,
             Err(TrackerError::Provider {
                 provider: Provider::Bangumi,
                 ..
@@ -980,7 +981,7 @@ mod tests {
         let service = test_service(&origin);
 
         let results = service
-            .search("alice", "bgm.tv/subject/1902", false)
+            .search("alice", "bgm.tv/subject/1902", false, None)
             .await
             .unwrap();
         assert_eq!(results.len(), 1);

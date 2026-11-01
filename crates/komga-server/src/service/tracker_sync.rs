@@ -335,6 +335,7 @@ mod tests {
             _user_id: &str,
             _query: &str,
             _nsfw: bool,
+            _title_language: Option<&str>,
         ) -> Result<Vec<TrackSearchItem>, TrackerError> {
             Ok(vec![])
         }

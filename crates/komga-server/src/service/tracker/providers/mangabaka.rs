@@ -19,7 +19,6 @@ pub struct MangaBakaTracker {
     http: reqwest::Client,
     oauth: Arc<OAuthManager>,
     api_origin: String,
-    title_language: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,14 +216,7 @@ impl MangaBakaTracker {
             http,
             oauth,
             api_origin: api_origin.into().trim_end_matches('/').to_string(),
-            title_language: DEFAULT_TITLE_LANGUAGE.into(),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_title_language(mut self, title_language: impl Into<String>) -> Self {
-        self.title_language = title_language.into();
-        self
     }
 
     fn api_url(&self, segments: &[&str]) -> Result<Url, TrackerError> {
@@ -366,11 +358,16 @@ impl MangaBakaTracker {
         Ok(envelope.data)
     }
 
-    fn search_item(&self, series: &Series, tracked: bool) -> TrackSearchItem {
+    fn search_item(
+        &self,
+        series: &Series,
+        tracked: bool,
+        language: Option<&str>,
+    ) -> TrackSearchItem {
         let title = if series.titles.is_empty() {
             series.title.clone()
         } else {
-            primary_title(&series.titles, &self.title_language)
+            primary_title(&series.titles, language.unwrap_or(DEFAULT_TITLE_LANGUAGE))
         };
         let media_type = match series.series_type.as_deref() {
             Some("novel") => Some(TrackMediaType::Novel),
@@ -460,6 +457,7 @@ impl TrackerService for MangaBakaTracker {
         user_id: &str,
         query: &str,
         nsfw: bool,
+        language: Option<&str>,
     ) -> Result<Vec<TrackSearchItem>, TrackerError> {
         let series = if let Some(id) = Self::series_url_id(query) {
             vec![self.detail(id).await?]
@@ -484,7 +482,7 @@ impl TrackerService for MangaBakaTracker {
         let tracked = self.tracked_ids(user_id, &ids).await?;
         Ok(series
             .iter()
-            .map(|series| self.search_item(series, tracked.contains(&series.id)))
+            .map(|series| self.search_item(series, tracked.contains(&series.id), language))
             .collect())
     }
 
@@ -704,19 +702,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn public_search_uses_batch_tracking_and_title_language() {
+    async fn public_search_uses_batch_tracking_and_language() {
         let (origin, mock) = serve(|request| match request.path.as_str() {
             "/v1/series/search" => (StatusCode::OK, json!({"data": [series(7), series(8)]})),
             "/v1/my/library/batch" => (StatusCode::OK, json!({"data": [{"series_id": 7}]})),
             _ => (StatusCode::NOT_FOUND, json!({"message": "unexpected"})),
         })
         .await;
-        let service = test_service(&origin).with_title_language("ja");
+        let service = test_service(&origin);
         assert_eq!(service.provider(), Provider::Mangabaka);
         assert!(service.is_logged_in("alice").unwrap());
 
         let results = service
-            .search("alice", "A title / 検索", false)
+            .search("alice", "A title / 検索", false, Some("ja"))
             .await
             .unwrap();
         assert_eq!(results.len(), 2);
@@ -758,12 +756,43 @@ mod tests {
         let default_title: Series = serde_json::from_value(series(9)).unwrap();
         assert_eq!(
             test_service(&origin)
-                .search_item(&default_title, false)
+                .search_item(&default_title, false, None)
                 .title,
             "English 9"
         );
-        let romaji = test_service(&origin).with_title_language("ja-ro");
-        assert_eq!(romaji.search_item(&default_title, false).title, "Romaji 9");
+        let romaji = test_service(&origin);
+        assert_eq!(
+            romaji
+                .search_item(&default_title, false, Some("ja-ro"))
+                .title,
+            "Romaji 9"
+        );
+
+        let localized = Series {
+            titles: vec![
+                SeriesTitle {
+                    language: "zh-Hans".into(),
+                    title: "简体中文".into(),
+                    ..SeriesTitle::default()
+                },
+                SeriesTitle {
+                    language: "zh-Hant".into(),
+                    title: "繁體中文".into(),
+                    ..SeriesTitle::default()
+                },
+            ],
+            ..Series::default()
+        };
+        for (language, expected) in [
+            (Some("zh-Hant"), "繁體中文"),
+            (Some("zh-Hans"), "简体中文"),
+            (Some("fr"), "简体中文"),
+        ] {
+            assert_eq!(
+                romaji.search_item(&localized, false, language).title,
+                expected
+            );
+        }
     }
 
     #[tokio::test]
@@ -777,11 +806,12 @@ mod tests {
         let service = test_service(&origin);
 
         let results = service
-            .search("alice", "mangabaka.org/77", true)
+            .search("alice", "mangabaka.org/77", true, Some("ja"))
             .await
             .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].id, "77");
+        assert_eq!(results[0].title, "日本語 77");
         let requests = mock.requests();
         let detail = requests
             .iter()
@@ -878,7 +908,7 @@ mod tests {
         let service = test_service(&origin);
 
         assert!(matches!(
-            service.search("alice", "Book", false).await,
+            service.search("alice", "Book", false, None).await,
             Err(TrackerError::Provider {
                 provider: Provider::Mangabaka,
                 ..

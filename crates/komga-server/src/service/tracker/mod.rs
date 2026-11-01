@@ -87,6 +87,7 @@ pub trait TrackerService: Send + Sync {
         user_id: &str,
         query: &str,
         nsfw: bool,
+        language: Option<&str>,
     ) -> Result<Vec<TrackSearchItem>, TrackerError>;
 
     async fn get_state(&self, user_id: &str, track_id: &str) -> Result<RemoteState, TrackerError>;
@@ -187,6 +188,7 @@ mod tests {
             _user_id: &str,
             _query: &str,
             _nsfw: bool,
+            _language: Option<&str>,
         ) -> Result<Vec<TrackSearchItem>, TrackerError> {
             Ok(Vec::new())
         }
@@ -243,7 +245,7 @@ mod tests {
         let tracker = cloned.get(Provider::Anilist).unwrap();
         assert!(tracker.is_logged_in("alice").unwrap());
         assert!(tracker
-            .search("alice", "title", true)
+            .search("alice", "title", true, None)
             .await
             .unwrap()
             .is_empty());

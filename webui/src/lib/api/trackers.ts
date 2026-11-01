@@ -102,7 +102,7 @@ export const trackersApi = {
     api.put<TrackerPreferences>('/api/v1/trackers/preferences', body),
 
   // native provider calls, scoped by the server to the calling user's tracker account
-  search: (provider: KomfOAuthProvider, params: { name: string; nsfw?: boolean }) =>
+  search: (provider: KomfOAuthProvider, params: { name: string; nsfw?: boolean; language?: string }) =>
     api.get<TrackerSearchItem[]>(`/api/v1/trackers/${provider}/search`, params),
   getState: (provider: KomfOAuthProvider, trackId: string) =>
     api.get<TrackerState>(`/api/v1/trackers/${provider}/state`, { trackId }),
