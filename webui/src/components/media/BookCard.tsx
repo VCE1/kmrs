@@ -1,4 +1,5 @@
 import type { BookDto } from '@/lib/api/types'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CheckCircle, EyeSlash, Play } from '@phosphor-icons/react'
@@ -33,6 +34,7 @@ export function BookCard({ book, className, showSeries, eager, selection }: Book
   const navigate = useNavigate()
   const bust = useBust(book.id)
   const blurUnread = useUiStore((s) => s.blurUnreadCovers)
+  const [menuOpen, setMenuOpen] = useState(false)
   const title = book.metadata.title || book.name
   const unread = !book.readProgress
 
@@ -81,10 +83,13 @@ export function BookCard({ book, className, showSeries, eager, selection }: Book
       to={bookDetailRoute(book)}
       label={title}
       className={selection ? undefined : className}
+      onLongPress={selection?.active ? undefined : () => setMenuOpen(true)}
       actions={
         selection?.active ? undefined : (
           <BookCardMenu
             book={book}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
             navItem={
               <>
                 <MenuItem onSelect={() => navigate(readTo ?? bookDetailRoute(book))}>

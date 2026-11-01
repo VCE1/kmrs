@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import type { SeriesDto } from '@/lib/api/types'
@@ -46,6 +47,7 @@ export function SeriesCard({ series, className, eager, selection }: SeriesCardPr
   const { t } = useTranslation('media')
   const bust = useBust(series.id)
   const blurUnread = useUiStore((s) => s.blurUnreadCovers)
+  const [menuOpen, setMenuOpen] = useState(false)
   const title = series.metadata.title || series.name
 
   // like komga: an unavailable series replaces its status line
@@ -58,10 +60,13 @@ export function SeriesCard({ series, className, eager, selection }: SeriesCardPr
       to={series.oneshot ? `/oneshot/${series.id}` : `/series/${series.id}`}
       label={title}
       className={selection ? undefined : className}
+      onLongPress={selection?.active ? undefined : () => setMenuOpen(true)}
       actions={
         selection?.active ? undefined : (
           <SeriesCardMenu
             series={series}
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
             trigger={<CardMenuButton aria-label={t('card.actionsFor', { title })} />}
           />
         )

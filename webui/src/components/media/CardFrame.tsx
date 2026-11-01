@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DotsThree } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils/cn'
 import { useUiStore } from '@/lib/store/ui'
+import { useLongPress } from '@/lib/hooks/useLongPress'
 
 interface CardFrameProps {
   to: string
@@ -12,14 +13,17 @@ interface CardFrameProps {
   /** overlay controls (e.g. the actions menu); rendered as siblings of the link so no
       interactive element nests inside the <a> */
   actions?: ReactNode
+  onLongPress?: () => void
 }
 
 /** Shared hover/press treatment for all media cards. */
-export function CardFrame({ to, children, className, label, actions }: CardFrameProps) {
+export function CardFrame({ to, children, className, label, actions, onLongPress }: CardFrameProps) {
+  const longPress = useLongPress(onLongPress ?? (() => undefined))
   const link = (
     <Link
       to={to}
       aria-label={label}
+      {...(onLongPress ? longPress : {})}
       className={cn(
         'group block cursor-pointer rounded-lg outline-none transition-transform duration-200 ease-out',
         'active:scale-[0.98]',
@@ -40,9 +44,9 @@ export function CardFrame({ to, children, className, label, actions }: CardFrame
 }
 
 /** Hover-revealed corner action pinned to the cover's bottom-right (badges live top-right,
-    the selection checkbox top-left); always visible on touch, where hover never fires.
-    Forwards props+ref because Radix Trigger asChild injects handlers/state onto the child.
-    Defaults to the menu dots; pass children to use it for another card action. */
+    the selection checkbox top-left). Forwards props+ref because Radix Trigger asChild
+    injects handlers/state onto the child. Defaults to the menu dots; pass children to use
+    it for another card action. */
 export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(
   function CardMenuButton({ className, children, ...rest }, ref) {
     return (
@@ -51,7 +55,7 @@ export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes
         type="button"
         className={cn(
           'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-[opacity,background-color] duration-300 ease-out hover:bg-black/80 pointer-coarse:size-9',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:not-data-[state=open]:opacity-70',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
           className,
         )}
         {...rest}

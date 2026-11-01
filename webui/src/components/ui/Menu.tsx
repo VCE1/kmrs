@@ -9,14 +9,16 @@ interface MenuProps {
   side?: 'top' | 'bottom' | 'left' | 'right'
   /** size the popup to the trigger's width (e.g. the sidebar account button) */
   matchTriggerWidth?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export function Menu({ trigger, children, align = 'end', side = 'bottom', matchTriggerWidth }: MenuProps) {
+export function Menu({ trigger, children, align = 'end', side = 'bottom', matchTriggerWidth, open, onOpenChange }: MenuProps) {
   // Radix returns focus to the trigger on close, which leaves a :focus-visible ring after
   // pointer use; skip the restore for pointer-opened menus, keep it for keyboard
   const pointerOpened = useRef(false)
   return (
-    <RadixMenu.Root>
+    <RadixMenu.Root open={open} onOpenChange={onOpenChange}>
       <RadixMenu.Trigger asChild onPointerDown={() => (pointerOpened.current = true)}>
         {trigger}
       </RadixMenu.Trigger>

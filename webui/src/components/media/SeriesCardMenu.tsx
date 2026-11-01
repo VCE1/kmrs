@@ -14,7 +14,14 @@ import { KomfIdentifyDialog } from '@/components/metadata/KomfIdentifyDialog'
 import { showToast } from '@/lib/store/toast'
 
 /** Series actions for grid cards, plus the dialogs they open. */
-export function SeriesCardMenu({ series, trigger }: { series: SeriesDto; trigger: ReactNode }) {
+interface SeriesCardMenuProps {
+  series: SeriesDto
+  trigger: ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+export function SeriesCardMenu({ series, trigger, open, onOpenChange }: SeriesCardMenuProps) {
   const { t } = useTranslation('media')
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
@@ -57,7 +64,7 @@ export function SeriesCardMenu({ series, trigger }: { series: SeriesDto; trigger
 
   return (
     <>
-      <Menu trigger={trigger}>
+      <Menu trigger={trigger} open={open} onOpenChange={onOpenChange}>
         <MenuItem onSelect={() => markMutation.mutate(hasUnread)}>
           {hasUnread ? <Checks className="size-4" /> : <ArrowCounterClockwise className="size-4" />}
           {hasUnread ? t('menu.markAsRead') : t('menu.markAsUnread')}

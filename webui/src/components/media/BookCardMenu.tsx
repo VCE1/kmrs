@@ -26,10 +26,12 @@ interface BookCardMenuProps {
   trigger: ReactNode
   /** leading navigation items; each card links one destination and offers the other here */
   navItem?: ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** Book actions shared by horizontal and grid cards, plus the dialogs they open. */
-export function BookCardMenu({ book, trigger, navItem }: BookCardMenuProps) {
+export function BookCardMenu({ book, trigger, navItem, open, onOpenChange }: BookCardMenuProps) {
   const { t } = useTranslation('media')
   const queryClient = useQueryClient()
   const user = useAuthStore((s) => s.user)
@@ -70,7 +72,7 @@ export function BookCardMenu({ book, trigger, navItem }: BookCardMenuProps) {
 
   return (
     <>
-      <Menu trigger={trigger}>
+      <Menu trigger={trigger} open={open} onOpenChange={onOpenChange}>
         {navItem}
         {!completed && (
           <MenuItem onSelect={() => markMutation.mutate(true)}>
