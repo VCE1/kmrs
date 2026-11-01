@@ -58,6 +58,7 @@
     "behavior": "동작",
     "swipe": "스와이프 제스처",
     "animations": "페이지 넘김 애니메이션",
+    "pageTransition": "페이지 넘김 스타일",
     "alwaysFullscreen": "항상 전체 화면",
     "sidePadding": "좌우 여백",
     "pageGap": "페이지 간격",
@@ -69,6 +70,11 @@
     "shrink": "너비에 맞춰 축소",
     "height": "높이에 맞춤",
     "original": "원본"
+  },
+  "pageTransition": {
+    "auto": "자동",
+    "slide": "슬라이드",
+    "fade": "페이드"
   },
   "layout": {
     "single": "한 페이지",

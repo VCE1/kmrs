@@ -1,5 +1,5 @@
 import { CircleNotch, ImageBroken } from '@phosphor-icons/react'
-import { useState, type CSSProperties, type HTMLAttributes } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type HTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/Button'
 import { useReaderSettings } from '@/lib/store/readerSettings'
@@ -14,6 +14,10 @@ interface PageImageProps extends HTMLAttributes<HTMLDivElement> {
   imgStyle?: CSSProperties
   /** gates the img element for slots that defer loading; the spinner only shows while loading */
   load?: boolean
+  /** decode ahead of display: left to paint time, a big image stalls the turn that reveals it */
+  predecode?: boolean
+  /** fires once a predecoded image can be shown without a blank frame, or has failed for good */
+  onReady?: (src: string) => void
   onMeasure?: (width: number, height: number) => void
 }
 
@@ -33,6 +37,8 @@ export function PageImage({
   imgClassName,
   imgStyle,
   load = true,
+  predecode = false,
+  onReady,
   onMeasure,
   className,
   style,
@@ -44,6 +50,12 @@ export function PageImage({
   const { attempt, failed } = imageStateFor(state, src)
   const background = useReaderSettings((s) => s.background)
   const hintColor = background === 'WHITE' ? 'text-black/50' : 'text-white/60'
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!predecode) return
+    if (failed) onReady?.(src)
+    else if (loaded) imgRef.current?.decode().catch(() => {}).finally(() => onReady?.(src))
+  }, [predecode, loaded, failed, src, onReady])
   return (
     <div className={cn('relative', className)} style={style} {...rest}>
       {load && !loaded && !failed && (
@@ -86,6 +98,7 @@ export function PageImage({
             className={imgClassName ?? 'block h-full w-full object-contain'}
             style={imgStyle}
             ref={(el) => {
+              imgRef.current = el
               if (el?.complete && el.naturalWidth > 0) setLoaded(true)
             }}
             onLoad={(e) => {

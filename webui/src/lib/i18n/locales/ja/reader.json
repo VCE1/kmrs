@@ -58,6 +58,7 @@
     "behavior": "動作",
     "swipe": "スワイプジェスチャー",
     "animations": "ページめくりアニメーション",
+    "pageTransition": "ページめくりのスタイル",
     "alwaysFullscreen": "常に全画面",
     "sidePadding": "左右の余白",
     "pageGap": "ページ間隔",
@@ -69,6 +70,11 @@
     "shrink": "幅に合わせて縮小",
     "height": "高さに合わせる",
     "original": "原寸"
+  },
+  "pageTransition": {
+    "auto": "自動",
+    "slide": "スライド",
+    "fade": "フェード"
   },
   "layout": {
     "single": "単ページ",

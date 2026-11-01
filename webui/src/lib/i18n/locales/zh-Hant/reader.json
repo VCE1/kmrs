@@ -58,6 +58,7 @@
     "behavior": "行為",
     "swipe": "滑動手勢",
     "animations": "翻頁動畫",
+    "pageTransition": "翻頁樣式",
     "alwaysFullscreen": "一律全螢幕",
     "sidePadding": "側邊留白",
     "pageGap": "頁面間距",
@@ -69,6 +70,11 @@
     "shrink": "縮至寬度",
     "height": "符合高度",
     "original": "原始大小"
+  },
+  "pageTransition": {
+    "auto": "自動",
+    "slide": "滑動",
+    "fade": "淡入淡出"
   },
   "layout": {
     "single": "單頁",

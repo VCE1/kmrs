@@ -58,6 +58,7 @@
     "behavior": "Verhalten",
     "swipe": "Wischgesten",
     "animations": "Blätteranimation",
+    "pageTransition": "Blätterstil",
     "alwaysFullscreen": "Immer Vollbild",
     "sidePadding": "Seitenrand",
     "pageGap": "Seitenabstand",
@@ -69,6 +70,11 @@
     "shrink": "Auf Breite verkleinern",
     "height": "An Höhe anpassen",
     "original": "Original"
+  },
+  "pageTransition": {
+    "auto": "Automatisch",
+    "slide": "Schieben",
+    "fade": "Überblenden"
   },
   "layout": {
     "single": "Einzelseite",

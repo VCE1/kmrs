@@ -6,6 +6,7 @@ import {
   READER_BACKGROUNDS,
   useReaderSettings,
   type ContinuousScaleType,
+  type PageTransition,
   type ReaderBackground,
   type ScaleType,
 } from '@/lib/store/readerSettings'
@@ -48,6 +49,12 @@ const PAGED_SCALE_VALUES: ScaleType[] = ['SCREEN', 'WIDTH', 'WIDTH_SHRINK_ONLY',
 const CONTINUOUS_SCALE_VALUES: ContinuousScaleType[] = ['WIDTH', 'ORIGINAL']
 const LAYOUT_VALUES: PagedReaderLayout[] = ['SINGLE_PAGE', 'DOUBLE_PAGES', 'DOUBLE_NO_COVER']
 const BACKGROUND_VALUES: ReaderBackground[] = ['BLACK', 'GRAY', 'WHITE']
+const PAGE_TRANSITION_VALUES: PageTransition[] = ['AUTO', 'SLIDE', 'FADE']
+const PAGE_TRANSITION_LABEL_KEYS: Record<PageTransition, string> = {
+  AUTO: 'pageTransition.auto',
+  SLIDE: 'pageTransition.slide',
+  FADE: 'pageTransition.fade',
+}
 
 interface SettingsPanelProps {
   open: boolean
@@ -72,6 +79,7 @@ export function SettingsPanel({
   const continuousMargin = useReaderSettings((s) => s.continuousMargin)
   const swipe = useReaderSettings((s) => s.swipe)
   const animations = useReaderSettings((s) => s.animations)
+  const pageTransition = useReaderSettings((s) => s.pageTransition)
   const alwaysFullscreen = useReaderSettings((s) => s.alwaysFullscreen)
   const background = useReaderSettings((s) => s.background)
   const update = useReaderSettings((s) => s.update)
@@ -90,6 +98,10 @@ export function SettingsPanel({
     label: t(SCALE_LABEL_KEYS[value]),
   }))
   const layoutOptions = LAYOUT_VALUES.map((value) => ({ value, label: t(LAYOUT_LABEL_KEYS[value]) }))
+  const transitionOptions = PAGE_TRANSITION_VALUES.map((value) => ({
+    value,
+    label: t(PAGE_TRANSITION_LABEL_KEYS[value]),
+  }))
 
   return (
     <AnimatePresence>
@@ -209,6 +221,16 @@ export function SettingsPanel({
                       label={t('panel.animations')}
                     />
                   </Row>
+                  {animations && !webtoon && (
+                    <Row label={t('panel.pageTransition')}>
+                      <SegmentedControl
+                        options={transitionOptions}
+                        value={pageTransition}
+                        onChange={(v) => update({ pageTransition: v })}
+                        size="sm"
+                      />
+                    </Row>
+                  )}
                   <Row label={t('panel.alwaysFullscreen')}>
                     <Switch
                       checked={alwaysFullscreen}

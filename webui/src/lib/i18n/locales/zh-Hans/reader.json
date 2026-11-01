@@ -58,6 +58,7 @@
     "behavior": "行为",
     "swipe": "滑动手势",
     "animations": "翻页动画",
+    "pageTransition": "翻页样式",
     "alwaysFullscreen": "始终全屏",
     "sidePadding": "左右边距",
     "pageGap": "页面间距",
@@ -69,6 +70,11 @@
     "shrink": "缩小至宽度",
     "height": "适应高度",
     "original": "原始尺寸"
+  },
+  "pageTransition": {
+    "auto": "自动",
+    "slide": "滑动",
+    "fade": "淡入淡出"
   },
   "layout": {
     "single": "单页",

@@ -58,6 +58,7 @@
     "behavior": "Comportement",
     "swipe": "Gestes de balayage",
     "animations": "Animation de tour de page",
+    "pageTransition": "Style de tour de page",
     "alwaysFullscreen": "Toujours en plein écran",
     "sidePadding": "Marge latérale",
     "pageGap": "Écart entre pages",
@@ -69,6 +70,11 @@
     "shrink": "Réduire à la largeur",
     "height": "Ajuster à la hauteur",
     "original": "Originale"
+  },
+  "pageTransition": {
+    "auto": "Auto",
+    "slide": "Glissement",
+    "fade": "Fondu"
   },
   "layout": {
     "single": "Page simple",

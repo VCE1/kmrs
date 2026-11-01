@@ -58,6 +58,7 @@
     "behavior": "Comportamiento",
     "swipe": "Gestos de deslizamiento",
     "animations": "Animación de paso de página",
+    "pageTransition": "Estilo de paso de página",
     "alwaysFullscreen": "Siempre en pantalla completa",
     "sidePadding": "Margen lateral",
     "pageGap": "Separación entre páginas",
@@ -69,6 +70,11 @@
     "shrink": "Reducir al ancho",
     "height": "Ajustar a la altura",
     "original": "Original"
+  },
+  "pageTransition": {
+    "auto": "Automático",
+    "slide": "Deslizar",
+    "fade": "Fundido"
   },
   "layout": {
     "single": "Página única",

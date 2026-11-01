@@ -58,6 +58,7 @@
     "behavior": "Behavior",
     "swipe": "Swipe gestures",
     "animations": "Page turn animation",
+    "pageTransition": "Page turn style",
     "alwaysFullscreen": "Always fullscreen",
     "sidePadding": "Side padding",
     "pageGap": "Page gap",
@@ -69,6 +70,11 @@
     "shrink": "Shrink to width",
     "height": "Fit height",
     "original": "Original"
+  },
+  "pageTransition": {
+    "auto": "Auto",
+    "slide": "Slide",
+    "fade": "Fade"
   },
   "layout": {
     "single": "Single page",

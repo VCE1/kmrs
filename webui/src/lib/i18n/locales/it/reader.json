@@ -58,6 +58,7 @@
     "behavior": "Comportamento",
     "swipe": "Gesti touch",
     "animations": "Animazione cambio pagina",
+    "pageTransition": "Stile cambio pagina",
     "alwaysFullscreen": "Sempre a schermo intero",
     "sidePadding": "Margini laterali",
     "pageGap": "Spazio tra pagine",
@@ -69,6 +70,11 @@
     "shrink": "Riduci alla larghezza",
     "height": "Adatta all'altezza",
     "original": "Originale"
+  },
+  "pageTransition": {
+    "auto": "Automatico",
+    "slide": "Scorrimento",
+    "fade": "Dissolvenza"
   },
   "layout": {
     "single": "Pagina singola",

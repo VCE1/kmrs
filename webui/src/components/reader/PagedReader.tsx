@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from 'react'
 import { useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import type { ReadingDirection } from '@/lib/api/types'
@@ -83,6 +92,21 @@ function splitBoxStyle(scale: ScaleType, width: number, height: number): CSSProp
   return style
 }
 
+/** How long a turn keeps the old page up while the target loads; past this the spinner is the better answer */
+const TURN_HOLD_MS = 500
+
+const landscapeViewport = window.matchMedia('(orientation: landscape)')
+
+function useLandscapeViewport(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      landscapeViewport.addEventListener('change', onChange)
+      return () => landscapeViewport.removeEventListener('change', onChange)
+    },
+    () => landscapeViewport.matches,
+  )
+}
+
 export function PagedReader({
   pages,
   page,
@@ -99,6 +123,7 @@ export function PagedReader({
   const pageLayout = useReaderSettings((s) => s.pageLayout)
   const splitWide = useReaderSettings((s) => s.splitWide)
   const animations = useReaderSettings((s) => s.animations)
+  const pageTransition = useReaderSettings((s) => s.pageTransition)
   const swipe = useReaderSettings((s) => s.swipe)
   const reduceMotion = useReducedMotion()
   const { t } = useTranslation('reader')
@@ -120,7 +145,31 @@ export function PagedReader({
   const curSpread = spreads[spreadIndex]
   const curSplittable =
     splitOn && curSpread?.length === 1 && !curSpread[0].blank && isLandscape(curSpread[0])
+  // revealing a spread that is still loading or decoding drops to the bare background, and a
+  // run of those turns strobes, so the old spread stays up until the target can paint. Split
+  // pages opt out: the outgoing spread loses its crop the moment the turn starts
+  const [readyPages, setReadyPages] = useState<ReadonlySet<string>>(() => new Set())
+  const markReady = useCallback(
+    (src: string) => setReadyPages((prev) => (prev.has(src) ? prev : new Set(prev).add(src))),
+    [],
+  )
+  const [shown, setShown] = useState({ spreads, index: spreadIndex })
+  const targetReady = curSpread?.every((p) => p.blank || readyPages.has(p.url)) ?? true
+  if (shown.spreads !== spreads || (shown.index !== spreadIndex && (splitOn || targetReady)))
+    setShown({ spreads, index: spreadIndex })
+  const shownIndex = shown.index
+  useEffect(() => {
+    if (shownIndex === spreadIndex) return
+    const timer = window.setTimeout(() => setShown({ spreads, index: spreadIndex }), TURN_HOLD_MS)
+    return () => window.clearTimeout(timer)
+  }, [shownIndex, spreadIndex, spreads])
   const animate = animations && !reduceMotion
+  const landscape = useLandscapeViewport()
+  // a page narrower than the viewport leaves a gap that a slide sweeps through the reading
+  // area as a dark flash on every turn. Split pages keep sliding: leaving the current spread
+  // drops the crop, which a fade would show in place
+  const crossfade =
+    animate && !splitOn && (pageTransition === 'FADE' || (pageTransition === 'AUTO' && landscape && !vertical))
   // fit modes stay inside the viewport; the rest need a scrollable slide
   const scrollable = scale === 'WIDTH' || scale === 'WIDTH_SHRINK_ONLY' || scale === 'ORIGINAL'
   // hugging the content keeps horizontal overflow reachable by scroll while small content stays centered
@@ -284,8 +333,8 @@ export function PagedReader({
   }
 
   const transform = vertical
-    ? `translateY(${-spreadIndex * 100}%)`
-    : `translateX(${(flip ? 1 : -1) * spreadIndex * 100}%)`
+    ? `translateY(${-shownIndex * 100}%)`
+    : `translateX(${(flip ? 1 : -1) * shownIndex * 100}%)`
 
   return (
     <div
@@ -304,18 +353,35 @@ export function PagedReader({
         style={{ transformOrigin: '0 0', willChange: zoomed ? 'transform' : undefined }}
       >
         <div
+          // remounted on a mode switch, or every slide would fade out from the strip's opaque state
+          key={crossfade ? 'crossfade' : 'strip'}
           className={cn(
-            'flex h-full w-full',
-            vertical ? 'flex-col' : flip && 'flex-row-reverse',
-            animate && 'transition-transform duration-300 ease-out-expo',
+            'h-full w-full',
+            crossfade
+              ? 'relative'
+              : cn(
+                  'flex',
+                  vertical ? 'flex-col' : flip && 'flex-row-reverse',
+                  animate && 'transition-transform duration-300 ease-[cubic-bezier(.25,.8,.5,1)]',
+                ),
           )}
-          style={{ transform }}
+          style={crossfade ? undefined : { transform }}
         >
           {spreads.map((spread, i) => {
             const double = spread.length > 1
-            const near = Math.abs(i - spreadIndex) <= 2
+            const near = Math.abs(i - spreadIndex) <= 2 || i === shownIndex
             return (
-              <div key={i} className="flex h-full w-full shrink-0 overflow-auto no-scrollbar">
+              <div
+                key={i}
+                className={cn(
+                  'flex h-full w-full overflow-auto no-scrollbar',
+                  !crossfade && 'shrink-0',
+                  // the new page is opaque at once under the fading old one, so the
+                  // reader background never shows through mid-turn
+                  crossfade && 'absolute inset-0',
+                  crossfade && i !== shownIndex && 'pointer-events-none z-10 opacity-0 transition-opacity duration-200',
+                )}
+              >
                 <div
                   className={cn(
                     'm-auto flex justify-center',
@@ -361,6 +427,8 @@ export function PagedReader({
                         alt={t('pageAlt', { page: p.number })}
                         className={cls}
                         style={dim}
+                        predecode={i - spreadIndex >= -1 && i - spreadIndex <= 2}
+                        onReady={markReady}
                         onMeasure={(w, h) => onMeasure(p.number, w, h)}
                       />
                     )

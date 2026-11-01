@@ -5,6 +5,7 @@ import type { PagedReaderLayout } from '@/lib/utils/spreads'
 
 export type ScaleType = 'SCREEN' | 'WIDTH' | 'WIDTH_SHRINK_ONLY' | 'HEIGHT' | 'ORIGINAL'
 export type ContinuousScaleType = 'WIDTH' | 'ORIGINAL'
+export type PageTransition = 'AUTO' | 'SLIDE' | 'FADE'
 export type ReaderBackground = 'BLACK' | 'GRAY' | 'WHITE'
 export type EpubTheme = 'DAY' | 'SEPIA' | 'NIGHT'
 export type EpubFontFamily = 'Original' | `server:${string}` | `local:${string}`
@@ -22,6 +23,8 @@ interface ReaderSettings {
   readingDirection: ReadingDirection
   swipe: boolean
   animations: boolean
+  /** paged reader turn style while animations are on; AUTO fades horizontal turns in landscape viewports */
+  pageTransition: PageTransition
   alwaysFullscreen: boolean
   background: ReaderBackground
   epubTheme: EpubTheme
@@ -55,6 +58,7 @@ export const useReaderSettings = create<ReaderSettingsState>()(
       readingDirection: 'LEFT_TO_RIGHT',
       swipe: true,
       animations: true,
+      pageTransition: 'AUTO',
       alwaysFullscreen: false,
       background: 'BLACK',
       epubTheme: 'DAY',
