@@ -1,0 +1,134 @@
+name: Docker Main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-main
+  cancel-in-progress: false
+
+jobs:
+  webui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/build-webui
+      - uses: actions/upload-artifact@v7
+        with:
+          name: webui-dist
+          path: webui/dist
+
+  build:
+    needs: webui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+    runs-on: ubuntu-latest
+    env:
+      KMRS_OAUTH_ANILIST_CLIENT_ID: ${{ secrets.KMRS_OAUTH_ANILIST_CLIENT_ID }}
+      KMRS_OAUTH_ANILIST_CLIENT_SECRET: ${{ secrets.KMRS_OAUTH_ANILIST_CLIENT_SECRET }}
+      KMRS_OAUTH_MAL_CLIENT_ID: ${{ secrets.KMRS_OAUTH_MAL_CLIENT_ID }}
+      KMRS_OAUTH_MAL_CLIENT_SECRET: ${{ secrets.KMRS_OAUTH_MAL_CLIENT_SECRET }}
+      KMRS_OAUTH_BANGUMI_CLIENT_ID: ${{ secrets.KMRS_OAUTH_BANGUMI_CLIENT_ID }}
+      KMRS_OAUTH_BANGUMI_CLIENT_SECRET: ${{ secrets.KMRS_OAUTH_BANGUMI_CLIENT_SECRET }}
+      KMRS_OAUTH_MANGABAKA_CLIENT_ID: ${{ secrets.KMRS_OAUTH_MANGABAKA_CLIENT_ID }}
+      KMRS_OAUTH_MANGABAKA_CLIENT_SECRET: ${{ secrets.KMRS_OAUTH_MANGABAKA_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v7
+      # the bundle is embedded into the binary at compile time
+      - uses: actions/download-artifact@v8
+        with:
+          name: webui-dist
+          path: webui/dist
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # registry downloads only; compile caching is sccache's job
+          cache-targets: "false"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - run: cross build --release --target ${{ matrix.target }} -p komga-server --features profiling
+        env:
+          # hermetic liblzma regardless of image contents
+          LZMA_API_STATIC: "1"
+          # keep the symbol table: heap dumps taken from the shipped binary are
+          # symbolized against it (jeprof needs function names)
+          CARGO_PROFILE_RELEASE_STRIP: "debuginfo"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docker-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/kmrs
+          if-no-files-found: error
+
+  docker:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: docker-*
+          path: artifacts
+      - name: Stage binaries
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          cp artifacts/docker-amd64/kmrs dist/amd64/kmrs
+          cp artifacts/docker-arm64/kmrs dist/arm64/kmrs
+          ls -l dist/amd64 dist/arm64
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@v4
+        with:
+          username: everpcpc
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v6
+        id: meta
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+            everpcpc/kmrs
+          tags: |
+            type=raw,value=main
+            type=sha,prefix=main-
+      - name: Smoke test (amd64)
+        # the shipped artifact gets no other runtime validation; a glibc or
+        # packaging regression must fail here, before anything is pushed
+        run: |
+          trap 'docker logs kmrs' ERR
+          docker buildx build --platform linux/amd64 --load -t kmrs:smoke .
+          docker run -d --name kmrs --user 1000:1000 -p 25600:25600 kmrs:smoke
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:25600/actuator/health > /dev/null && break || sleep 2
+          done
+          # the bundled web UI is served at /
+          curl -sf http://localhost:25600/ | grep -q "<title>KMReader</title>"
+          # the API is up and the database answers: claim status on a fresh install
+          curl -sf http://localhost:25600/api/v1/claim | grep -q '"isClaimed":false'
+          echo "server is up: web UI and API verified"
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

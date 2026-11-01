@@ -1,12 +1,12 @@
 name: Release
 
 # Publishes a GitHub release whenever the workspace version in Cargo.toml is
-# bumped on master: the version job computes v<version>, skips if that release
+# bumped on main: the version job computes v<version>, skips if that release
 # already exists, otherwise the matrix builds and the release job publishes.
 # `gh release create` creates the tag itself, pointing at the triggering commit.
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths: [Cargo.toml, .github/workflows/release.yml]
   workflow_dispatch:
 
