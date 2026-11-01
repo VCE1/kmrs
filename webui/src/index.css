@@ -32,6 +32,7 @@
   --accent-ink: #2a0e03;
   --danger: #ff5d5d;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 20px rgb(0 0 0 / 0.28);
+  --shadow-card-hover: 0 0 0 1px rgb(255 255 255 / 0.14), 0 4px 16px rgb(0 0 0 / 0.5), 0 12px 32px rgb(0 0 0 / 0.3);
   --shadow-pop: 0 4px 12px rgb(0 0 0 / 0.4), 0 16px 48px rgb(0 0 0 / 0.42);
   --brand-gradient: linear-gradient(135deg, #ffb340 0%, #ff3d68 100%);
   color-scheme: dark;
@@ -53,6 +54,7 @@
   --accent-ink: #2a0e03;
   --danger: #cf3636;
   --shadow-card: 0 1px 2px rgb(28 25 23 / 0.07), 0 8px 24px rgb(28 25 23 / 0.09);
+  --shadow-card-hover: 0 0 0 1px rgb(28 25 23 / 0.08), 0 4px 12px rgb(28 25 23 / 0.14), 0 12px 28px rgb(28 25 23 / 0.16);
   --shadow-pop: 0 4px 12px rgb(28 25 23 / 0.1), 0 16px 48px rgb(28 25 23 / 0.16);
   color-scheme: light;
 }
@@ -82,6 +84,8 @@
     'Source Han Serif SC', 'SimSun', 'Times New Roman', serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
+  --shadow-card-rest: 0 0 0 0 transparent;
   --shadow-pop: var(--shadow-pop);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }

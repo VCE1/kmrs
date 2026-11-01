@@ -21,7 +21,7 @@ export function CardFrame({ to, children, className, label, actions }: CardFrame
       to={to}
       aria-label={label}
       className={cn(
-        'group block cursor-pointer rounded-lg outline-none transition-transform duration-200 ease-out group-hover:-translate-y-[3px]',
+        'group block cursor-pointer rounded-lg outline-none transition-transform duration-200 ease-out',
         'active:scale-[0.98]',
         actions ? undefined : cn('animate-card-in', className),
       )}
@@ -50,8 +50,8 @@ export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes
         ref={ref}
         type="button"
         className={cn(
-          'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-[opacity,transform,background-color] duration-200 ease-out hover:bg-black/80 pointer-coarse:size-9',
-          'scale-75 opacity-0 group-hover:scale-100 group-hover:opacity-100 focus-visible:scale-100 focus-visible:opacity-100 data-[state=open]:scale-100 data-[state=open]:opacity-100 pointer-coarse:scale-100 pointer-coarse:not-data-[state=open]:opacity-70',
+          'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-[opacity,background-color] duration-300 ease-out hover:bg-black/80 pointer-coarse:size-9',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:not-data-[state=open]:opacity-70',
           className,
         )}
         {...rest}

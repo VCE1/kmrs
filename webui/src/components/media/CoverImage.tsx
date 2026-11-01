@@ -19,7 +19,7 @@ export function CoverImage({ src, alt, className, blurred, eager, referrerPolicy
   const xf = useImageCrossfade(src)
 
   return (
-    <div className={cn('cover-aspect relative w-full overflow-hidden rounded-lg bg-raised transition-shadow duration-300 group-hover:shadow-card', className)}>
+    <div className={cn('cover-aspect relative w-full overflow-hidden rounded-lg bg-raised shadow-card-rest transition-[box-shadow,filter] duration-300 ease-out group-hover:shadow-card-hover group-hover:brightness-110', className)}>
       {!xf.loaded && !xf.error && !xf.base && <div className="shimmer absolute inset-0" />}
       {xf.base && (
         <img
