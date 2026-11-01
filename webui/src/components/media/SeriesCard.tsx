@@ -77,7 +77,7 @@ export function SeriesCard({ series, className, eager, selection }: SeriesCardPr
         />
         {selection?.active && <SelectBadge {...selection} label={title} />}
         <UnreadBadge count={series.booksUnreadCount} show={!selection?.active} />
-        <CardOverlayText title={title} secondary={secondary} />
+        <CardOverlayText title={title} secondary={secondary} menuInset />
       </div>
       <ProgressCapsule
         value={series.booksCount > 0 && series.booksInProgressCount > 0 ? series.booksReadCount / series.booksCount : 0}

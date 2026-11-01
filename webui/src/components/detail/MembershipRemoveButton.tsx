@@ -27,6 +27,7 @@ function MembershipRemoveButton({ label, name, deleteTitle, deletesGroup, pendin
     <>
       <Tooltip content={label}>
         <CardMenuButton
+          className="inset-auto top-1.5 left-1"
           aria-label={label}
           disabled={pending}
           onClick={() => (deletesGroup ? setConfirmOpen(true) : onRemove())}

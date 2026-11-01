@@ -33,14 +33,15 @@ export function CardFrame({ to, children, className, label, actions }: CardFrame
   return (
     <div className={cn('group relative animate-card-in rounded-lg', className)}>
       {link}
-      {actions}
+      {/* the frame also spans the text under the cover; this box is the cover's area */}
+      <div className="cover-aspect pointer-events-none absolute inset-x-0 top-0">{actions}</div>
     </div>
   )
 }
 
-/** Hover-revealed corner action pinned to the cover's top-left (badges live top-right);
-    on cards with a selection checkbox it shifts right of it via className. Forwards
-    props+ref because Radix Trigger asChild injects handlers/state onto the child.
+/** Hover-revealed corner action pinned to the cover's bottom-right (badges live top-right,
+    the selection checkbox top-left); always visible on touch, where hover never fires.
+    Forwards props+ref because Radix Trigger asChild injects handlers/state onto the child.
     Defaults to the menu dots; pass children to use it for another card action. */
 export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement>>(
   function CardMenuButton({ className, children, ...rest }, ref) {
@@ -49,8 +50,8 @@ export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes
         ref={ref}
         type="button"
         className={cn(
-          'absolute top-1.5 left-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/80',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+          'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/80',
+          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:not-data-[state=open]:opacity-70',
           className,
         )}
         {...rest}
@@ -71,6 +72,11 @@ interface CardTextProps {
   center?: boolean
 }
 
+interface CardOverlayTextProps extends CardTextProps {
+  /** keeps the text clear of the CardMenuButton sharing the cover's bottom-right */
+  menuInset?: boolean
+}
+
 /** Title block under a cover; honors the global card-style preference. */
 export function CardText({ title, overline, secondary, titleLines = 1 }: CardTextProps) {
   const cardStyle = useUiStore((s) => s.cardStyle)
@@ -87,11 +93,16 @@ export function CardText({ title, overline, secondary, titleLines = 1 }: CardTex
 }
 
 /** Overlay variant: gradient on the cover itself, white text. */
-export function CardOverlayText({ title, overline, secondary, titleLines = 1 }: CardTextProps) {
+export function CardOverlayText({ title, overline, secondary, titleLines = 1, menuInset }: CardOverlayTextProps) {
   const cardStyle = useUiStore((s) => s.cardStyle)
   if (cardStyle !== 'overlay') return null
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2.5 pt-8 pb-2">
+    <div
+      className={cn(
+        'pointer-events-none absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/85 via-black/40 to-transparent px-2.5 pt-8 pb-2',
+        menuInset && 'pr-9',
+      )}
+    >
       {overline && <p className="mb-0.5 truncate text-[11px] text-white/70">{overline}</p>}
       <p className={cn('text-[12.5px] leading-snug font-medium text-white', titleLines === 2 ? 'line-clamp-2' : 'truncate')}>
         {title}
