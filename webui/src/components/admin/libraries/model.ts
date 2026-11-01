@@ -60,7 +60,7 @@ export const DEFAULTS: LibraryFormState = {
   importEpubSeries: true,
   importMylarSeries: true,
   importLocalArtwork: true,
-  importBarcodeIsbn: true,
+  importBarcodeIsbn: false,
   hashFiles: true,
   hashPages: false,
   hashKoreader: false,

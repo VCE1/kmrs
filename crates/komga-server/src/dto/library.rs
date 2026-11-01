@@ -49,7 +49,7 @@ pub struct LibraryCreationDto {
     pub import_mylar_series: bool,
     #[serde(default = "default_true")]
     pub import_local_artwork: bool,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub import_barcode_isbn: bool,
     #[serde(default)]
     pub scan_force_modified_time: bool,
@@ -133,11 +133,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn creation_defaults_match_kotlin() {
+    fn creation_defaults() {
         let dto: LibraryCreationDto =
             serde_json::from_str(r#"{"name":"Manga","root":"/data"}"#).unwrap();
         assert!(dto.import_comicinfo_book);
         assert!(dto.import_epub_book);
+        assert!(!dto.import_barcode_isbn);
         assert!(dto.scan_cbx && dto.scan_pdf && dto.scan_epub);
         assert_eq!(dto.scan_interval, ScanIntervalDto::Every6H);
         assert_eq!(dto.series_cover, SeriesCoverDto::First);
