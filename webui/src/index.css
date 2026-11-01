@@ -10,9 +10,13 @@
  *
  * Z-index scale: 10 sticky bars · 20 drawers · 30 dropdown/popover ·
  * 40 dialog · 50 toast · reader UI lives in its own fixed stacking context.
+ *
+ * `.theme-dark` pins a subtree to the dark values whatever the app theme, for
+ * surfaces that always sit over the reader.
  */
 
-:root {
+:root,
+.theme-dark {
   --bg: #0b0b0d;
   --surface: #131316;
   --raised: #1b1b1f;

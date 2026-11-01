@@ -8,6 +8,7 @@ import { fontsApi } from '@/lib/api/fonts'
 import type { BookDto } from '@/lib/api/types'
 import { canDownload, useAuthStore } from '@/lib/store/auth'
 import { useReaderSettings } from '@/lib/store/readerSettings'
+import { cn } from '@/lib/utils/cn'
 import { urls } from '@/lib/utils/urls'
 import { useDocumentTitle } from '@/lib/hooks/useDocumentTitle'
 import { Button } from '@/components/ui/Button'
@@ -28,6 +29,7 @@ export function EpubReader({ book }: { book: BookDto }) {
   const nav = useReaderNav(bookId)
   const user = useAuthStore((s) => s.user)
   const backdrop = EPUB_BACKDROP[useReaderSettings((s) => s.epubTheme)]
+  const scroll = useReaderSettings((s) => s.epubScroll)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<EpubNavigator | null>(null)
@@ -275,7 +277,14 @@ export function EpubReader({ book }: { book: BookDto }) {
   return (
     <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: backdrop }}>
       {/* the navigator rewrites the container's size itself and observes its parent; mx-auto splits the slack into even side margins */}
-      <div ref={containerRef} className="absolute inset-0 mx-auto" />
+      <div
+        className={cn(
+          'absolute inset-x-0',
+          scroll ? 'inset-y-0' : 'top-[max(2rem,env(safe-area-inset-top))] bottom-[max(2rem,env(safe-area-inset-bottom))]',
+        )}
+      >
+        <div ref={containerRef} className="absolute inset-0 mx-auto" />
+      </div>
 
       {phase === 'loading' && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-black text-white">

@@ -1,6 +1,21 @@
+import type { ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
-import { X } from '@phosphor-icons/react'
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowsHorizontal,
+  ArrowsInLineHorizontal,
+  ArrowsVertical,
+  BookOpen,
+  BookOpenText,
+  CornersOut,
+  File,
+  FrameCorners,
+  Scroll,
+  X,
+} from '@phosphor-icons/react'
 import type { ReadingDirection } from '@/lib/api/types'
 import {
   READER_BACKGROUNDS,
@@ -15,7 +30,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
-import { Row, Section } from '@/components/reader/panel'
+import { FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
 import { cn } from '@/lib/utils/cn'
 
 const SCALE_LABEL_KEYS: Record<ScaleType, string> = {
@@ -43,6 +58,27 @@ const BACKGROUND_LABEL_KEYS: Record<ReaderBackground, string> = {
   BLACK: 'background.black',
   GRAY: 'background.gray',
   WHITE: 'background.white',
+}
+
+const SCALE_ICONS: Record<ScaleType, ReactNode> = {
+  SCREEN: <CornersOut />,
+  WIDTH: <ArrowsHorizontal />,
+  WIDTH_SHRINK_ONLY: <ArrowsInLineHorizontal />,
+  HEIGHT: <ArrowsVertical />,
+  ORIGINAL: <FrameCorners />,
+}
+
+const LAYOUT_ICONS: Record<PagedReaderLayout, ReactNode> = {
+  SINGLE_PAGE: <File />,
+  DOUBLE_PAGES: <BookOpen />,
+  DOUBLE_NO_COVER: <BookOpenText />,
+}
+
+const DIRECTION_ICONS: Record<ReadingDirection, ReactNode> = {
+  LEFT_TO_RIGHT: <ArrowRight />,
+  RIGHT_TO_LEFT: <ArrowLeft />,
+  VERTICAL: <ArrowDown />,
+  WEBTOON: <Scroll />,
 }
 
 const PAGED_SCALE_VALUES: ScaleType[] = ['SCREEN', 'WIDTH', 'WIDTH_SHRINK_ONLY', 'HEIGHT', 'ORIGINAL']
@@ -91,13 +127,23 @@ export function SettingsPanel({
   const directionOptions = (Object.keys(DIRECTION_LABEL_KEYS) as ReadingDirection[]).map((value) => ({
     value,
     label: t(DIRECTION_LABEL_KEYS[value]),
+    icon: DIRECTION_ICONS[value],
   }))
-  const pagedScaleOptions = PAGED_SCALE_VALUES.map((value) => ({ value, label: t(SCALE_LABEL_KEYS[value]) }))
+  const pagedScaleOptions = PAGED_SCALE_VALUES.map((value) => ({
+    value,
+    label: t(SCALE_LABEL_KEYS[value]),
+    icon: SCALE_ICONS[value],
+  }))
   const continuousScaleOptions = CONTINUOUS_SCALE_VALUES.map((value) => ({
     value,
     label: t(SCALE_LABEL_KEYS[value]),
+    icon: SCALE_ICONS[value],
   }))
-  const layoutOptions = LAYOUT_VALUES.map((value) => ({ value, label: t(LAYOUT_LABEL_KEYS[value]) }))
+  const layoutOptions = LAYOUT_VALUES.map((value) => ({
+    value,
+    label: t(LAYOUT_LABEL_KEYS[value]),
+    icon: LAYOUT_ICONS[value],
+  }))
   const transitionOptions = PAGE_TRANSITION_VALUES.map((value) => ({
     value,
     label: t(PAGE_TRANSITION_LABEL_KEYS[value]),
@@ -124,58 +170,51 @@ export function SettingsPanel({
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-white/10 bg-black/85 text-white backdrop-blur-md"
+            className="theme-dark fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-line bg-bg/90 text-ink backdrop-blur-xl"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
               <h2 className="text-[15px] font-semibold">{t('panel.title')}</h2>
               <IconButton
                 label={t('panel.close')}
-                className="text-white/80 hover:bg-white/10 hover:text-white"
+                className="text-ink-2 hover:bg-overlay hover:text-ink"
                 onClick={onClose}
               >
                 <X className="size-4" />
               </IconButton>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
               <Section title={t('panel.direction')}>
-                <SegmentedControl
-                  options={directionOptions}
-                  value={direction}
-                  onChange={onDirectionChange}
-                  size="sm"
-                  className="flex flex-wrap"
-                />
+                <OptionTiles options={directionOptions} value={direction} onChange={onDirectionChange} perRow={4} />
               </Section>
 
               <Section title={t('panel.scale')}>
                 {webtoon ? (
-                  <SegmentedControl
+                  <OptionTiles
                     options={continuousScaleOptions}
                     value={continuousScale}
                     onChange={(v) => update({ continuousScale: v })}
-                    size="sm"
+                    perRow={2}
                   />
                 ) : (
-                  <SegmentedControl
+                  <OptionTiles
                     options={pagedScaleOptions}
                     value={scale}
                     onChange={(v) => update({ scale: v })}
-                    size="sm"
-                    className="flex flex-wrap"
+                    perRow={3}
                   />
                 )}
               </Section>
 
               {!webtoon && (
                 <Section title={t('panel.layout')}>
-                  <div className="space-y-3">
-                    <SegmentedControl
-                      options={layoutOptions}
-                      value={pageLayout}
-                      onChange={(v) => update({ pageLayout: v })}
-                      size="sm"
-                    />
+                  <OptionTiles
+                    options={layoutOptions}
+                    value={pageLayout}
+                    onChange={(v) => update({ pageLayout: v })}
+                    perRow={3}
+                  />
+                  <RowGroup>
                     <Row label={t('panel.splitWide')}>
                       <Switch
                         checked={splitWide}
@@ -183,34 +222,31 @@ export function SettingsPanel({
                         label={t('panel.splitWide')}
                       />
                     </Row>
-                  </div>
+                  </RowGroup>
                 </Section>
               )}
 
-              <Section title={t('panel.background')}>
-                <div className="flex gap-4">
-                  {BACKGROUND_VALUES.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => update({ background: value })}
-                      className="flex cursor-pointer flex-col items-center gap-1.5 text-[11px] text-white/60"
-                    >
-                      <span
-                        className={cn(
-                          'size-8 rounded-full border',
-                          background === value ? 'border-accent ring-2 ring-accent/40' : 'border-white/25',
-                        )}
-                        style={{ background: READER_BACKGROUNDS[value] }}
-                      />
-                      {t(BACKGROUND_LABEL_KEYS[value])}
-                    </button>
-                  ))}
-                </div>
-              </Section>
-
               <Section title={t('panel.behavior')}>
-                <div className="space-y-3">
+                <RowGroup>
+                  <Row label={t('panel.background')}>
+                    <div className="flex gap-2.5">
+                      {BACKGROUND_VALUES.map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-label={t(BACKGROUND_LABEL_KEYS[value])}
+                          aria-pressed={background === value}
+                          title={t(BACKGROUND_LABEL_KEYS[value])}
+                          onClick={() => update({ background: value })}
+                          className={cn(
+                            'size-6 cursor-pointer rounded-full border border-line-strong',
+                            background === value && 'ring-2 ring-accent ring-offset-2 ring-offset-raised',
+                          )}
+                          style={{ background: READER_BACKGROUNDS[value] }}
+                        />
+                      ))}
+                    </div>
+                  </Row>
                   <Row label={t('panel.swipe')}>
                     <Switch checked={swipe} onCheckedChange={(v) => update({ swipe: v })} label={t('panel.swipe')} />
                   </Row>
@@ -238,17 +274,13 @@ export function SettingsPanel({
                       label={t('panel.alwaysFullscreen')}
                     />
                   </Row>
-                </div>
+                </RowGroup>
               </Section>
 
               {webtoon && (
                 <Section title={t('common:readingDirection.webtoon')}>
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[13px] text-white/80">
-                        <span>{t('panel.sidePadding')}</span>
-                        <span className="font-mono text-xs text-white/50">{continuousPadding}%</span>
-                      </div>
+                  <FieldGroup>
+                    <SliderField label={t('panel.sidePadding')} value={`${continuousPadding}%`}>
                       <Slider
                         value={continuousPadding}
                         onValueChange={(v) => update({ continuousPadding: v })}
@@ -257,12 +289,8 @@ export function SettingsPanel({
                         step={5}
                         label={t('panel.sidePadding')}
                       />
-                    </div>
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[13px] text-white/80">
-                        <span>{t('panel.pageGap')}</span>
-                        <span className="font-mono text-xs text-white/50">{continuousMargin}px</span>
-                      </div>
+                    </SliderField>
+                    <SliderField label={t('panel.pageGap')} value={`${continuousMargin}px`}>
                       <Slider
                         value={continuousMargin}
                         onValueChange={(v) => update({ continuousMargin: v })}
@@ -271,8 +299,8 @@ export function SettingsPanel({
                         step={5}
                         label={t('panel.pageGap')}
                       />
-                    </div>
-                  </div>
+                    </SliderField>
+                  </FieldGroup>
                 </Section>
               )}
             </div>

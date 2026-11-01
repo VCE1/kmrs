@@ -5,7 +5,7 @@ import type { EpubFontFamily } from '@/lib/store/readerSettings'
 import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { TextField } from '@/components/ui/TextField'
-import { cn } from '@/lib/utils/cn'
+import { Chip } from '@/components/reader/panel'
 import { isLocalFont, localFontName, localFontValue, querySystemFontFamilies } from './fonts'
 
 interface LocalFontPickerProps {
@@ -62,18 +62,9 @@ export function LocalFontPicker({ value, onSelect }: LocalFontPickerProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openPicker}
-        className={cn(
-          'cursor-pointer rounded-md border px-2.5 py-1 text-[13px] transition-colors',
-          selectedName
-            ? 'border-accent text-white'
-            : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white/80',
-        )}
-      >
+      <Chip selected={!!selectedName} onClick={openPicker}>
         {selectedName ?? t('epub.fontSystem')}
-      </button>
+      </Chip>
 
       <Dialog open={open} onOpenChange={setOpen} title={t('epub.fontSystemTitle')} size="sm" fill>
         {status === 'ready' ? (

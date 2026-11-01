@@ -22,6 +22,11 @@ export const EPUB_BACKDROP: Record<EpubTheme, string> = {
 // Readium's 65-char default line length is tuned for Latin; at ~1em per glyph it puts the two-column threshold past tablet widths for CJK books
 export const CJK_OPTIMAL_LINE_LENGTH = 40
 
+// Readium pads paged text only at the sides and scrolled text not at all; the space above and
+// below paged text comes from the reader's own layout, since a column has no vertical padding
+const EPUB_SIDE_PADDING = 28
+const EPUB_SCROLL_VERTICAL_PADDING = 32
+
 export function buildEpubPreferences(s: {
   epubTheme: EpubTheme
   epubScroll: boolean
@@ -37,6 +42,11 @@ export function buildEpubPreferences(s: {
     scroll: s.epubScroll,
     fontSize: s.epubFontSize === 1 ? null : s.epubFontSize,
     lineHeight: s.epubLineHeight,
+    pageGutter: EPUB_SIDE_PADDING,
+    scrollPaddingLeft: EPUB_SIDE_PADDING,
+    scrollPaddingRight: EPUB_SIDE_PADDING,
+    scrollPaddingTop: EPUB_SCROLL_VERTICAL_PADDING,
+    scrollPaddingBottom: EPUB_SCROLL_VERTICAL_PADDING,
   })
 }
 

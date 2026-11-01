@@ -1,17 +1,15 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowCounterClockwise, X } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, BookOpen, Scroll, X } from '@phosphor-icons/react'
 import { useReaderSettings, type EpubTheme } from '@/lib/store/readerSettings'
 import { fontsApi } from '@/lib/api/fonts'
 import { IconButton } from '@/components/ui/IconButton'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
-import { Row, Section } from '@/components/reader/panel'
+import { Chip, FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
 import { isServerFont, serverFontValue } from '@/components/reader/epub/fonts'
 import { LocalFontPicker } from '@/components/reader/epub/LocalFontPicker'
-import { cn } from '@/lib/utils/cn'
 
 const THEME_VALUES: EpubTheme[] = ['DAY', 'SEPIA', 'NIGHT']
 const THEME_LABEL_KEYS: Record<EpubTheme, string> = {
@@ -44,9 +42,22 @@ export function EpubSettingsPanel({ open, onAlwaysFullscreenChange, onClose }: E
   const serverFontsQuery = useQuery({ queryKey: ['fonts', 'families'], queryFn: fontsApi.families, staleTime: Infinity })
   const serverFonts = serverFontsQuery.data ?? []
 
+  const themeOptions = THEME_VALUES.map((value) => ({
+    value,
+    label: t(THEME_LABEL_KEYS[value]),
+    icon: (
+      <span
+        aria-hidden
+        className="flex size-6 items-center justify-center rounded-full border border-line-strong text-[13px] font-medium"
+        style={{ background: THEME_SWATCH[value].bg, color: THEME_SWATCH[value].fg }}
+      >
+        A
+      </span>
+    ),
+  }))
   const layoutOptions = [
-    { value: 'paginated', label: t('epub.layoutPaginated') },
-    { value: 'scroll', label: t('epub.layoutScroll') },
+    { value: 'paginated', label: t('epub.layoutPaginated'), icon: <BookOpen /> },
+    { value: 'scroll', label: t('epub.layoutScroll'), icon: <Scroll /> },
   ]
 
   return (
@@ -70,108 +81,76 @@ export function EpubSettingsPanel({ open, onAlwaysFullscreenChange, onClose }: E
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ duration: reduceMotion ? 0 : 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-white/10 bg-black/85 text-white backdrop-blur-md"
+            className="theme-dark fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-line bg-bg/90 text-ink backdrop-blur-xl"
           >
-            <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
               <h2 className="text-[15px] font-semibold">{t('panel.title')}</h2>
               <IconButton
                 label={t('panel.close')}
-                className="text-white/80 hover:bg-white/10 hover:text-white"
+                className="text-ink-2 hover:bg-overlay hover:text-ink"
                 onClick={onClose}
               >
                 <X className="size-4" />
               </IconButton>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-4">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
               <Section title={t('epub.theme')}>
-                <div className="flex gap-4">
-                  {THEME_VALUES.map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => update({ epubTheme: value })}
-                      className="flex cursor-pointer flex-col items-center gap-1.5 text-[11px] text-white/60"
-                    >
-                      <span
-                        className={cn(
-                          'flex size-8 items-center justify-center rounded-full border text-[13px] font-medium',
-                          theme === value ? 'border-accent ring-2 ring-accent/40' : 'border-white/25',
-                        )}
-                        style={{ background: THEME_SWATCH[value].bg, color: THEME_SWATCH[value].fg }}
-                      >
-                        A
-                      </span>
-                      {t(THEME_LABEL_KEYS[value])}
-                    </button>
-                  ))}
-                </div>
+                <OptionTiles
+                  options={themeOptions}
+                  value={theme}
+                  onChange={(epubTheme) => update({ epubTheme })}
+                  perRow={3}
+                />
               </Section>
 
               <Section title={t('epub.layout')}>
-                <SegmentedControl
+                <OptionTiles
                   options={layoutOptions}
                   value={scroll ? 'scroll' : 'paginated'}
                   onChange={(v) => update({ epubScroll: v === 'scroll' })}
-                  size="sm"
-                  className="flex flex-wrap"
+                  perRow={2}
                 />
               </Section>
 
               <Section title={t('epub.typography')}>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <div className="text-[13px] text-white/80">{t('epub.fontFamily')}</div>
+                <FieldGroup>
+                  <div className="space-y-2">
+                    <div className="text-[13px] text-ink">{t('epub.fontFamily')}</div>
                     <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => update({ epubFontFamily: 'Original' })}
-                        className={cn(
-                          'cursor-pointer rounded-md border px-2.5 py-1 text-[13px] transition-colors',
-                          fontFamily === 'Original'
-                            ? 'border-accent text-white'
-                            : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white/80',
-                        )}
-                      >
+                      <Chip selected={fontFamily === 'Original'} onClick={() => update({ epubFontFamily: 'Original' })}>
                         {t('epub.fontPublisher')}
-                      </button>
+                      </Chip>
                       <LocalFontPicker
                         value={fontFamily}
                         onSelect={(epubFontFamily) => update({ epubFontFamily })}
                       />
                       {serverFonts.map((family) => (
-                        <button
+                        <Chip
                           key={family}
-                          type="button"
+                          selected={isServerFont(fontFamily) && fontFamily === serverFontValue(family)}
                           onClick={() => update({ epubFontFamily: serverFontValue(family) })}
-                          className={cn(
-                            'cursor-pointer rounded-md border px-2.5 py-1 text-[13px] transition-colors',
-                            isServerFont(fontFamily) && fontFamily === serverFontValue(family)
-                              ? 'border-accent text-white'
-                              : 'border-white/20 text-white/60 hover:border-white/40 hover:text-white/80',
-                          )}
                         >
                           {family}
-                        </button>
+                        </Chip>
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[13px] text-white/80">
-                      <span className="flex items-center gap-1.5">
-                        {t('epub.fontSize')}
-                        {fontSize !== 1 && (
-                          <IconButton
-                            label={t('epub.resetDefault')}
-                            className="size-6 text-white/50 hover:bg-white/10 hover:text-white"
-                            onClick={() => update({ epubFontSize: 1 })}
-                          >
-                            <ArrowCounterClockwise className="size-3.5" />
-                          </IconButton>
-                        )}
-                      </span>
-                      <span className="font-mono text-xs text-white/50">{Math.round(fontSize * 100)}%</span>
-                    </div>
+                  <SliderField
+                    label={t('epub.fontSize')}
+                    value={`${Math.round(fontSize * 100)}%`}
+                    action={
+                      fontSize !== 1 && (
+                        <IconButton
+                          label={t('epub.resetDefault')}
+                          className="size-6 text-ink-3 hover:bg-overlay hover:text-ink"
+                          onClick={() => update({ epubFontSize: 1 })}
+                        >
+                          <ArrowCounterClockwise className="size-3.5" />
+                        </IconButton>
+                      )
+                    }
+                  >
                     <Slider
                       value={fontSize}
                       onValueChange={(v) => update({ epubFontSize: v })}
@@ -180,25 +159,22 @@ export function EpubSettingsPanel({ open, onAlwaysFullscreenChange, onClose }: E
                       step={0.05}
                       label={t('epub.fontSize')}
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[13px] text-white/80">
-                      <span className="flex items-center gap-1.5">
-                        {t('epub.lineHeight')}
-                        {lineHeight !== null && (
-                          <IconButton
-                            label={t('epub.resetDefault')}
-                            className="size-6 text-white/50 hover:bg-white/10 hover:text-white"
-                            onClick={() => update({ epubLineHeight: null })}
-                          >
-                            <ArrowCounterClockwise className="size-3.5" />
-                          </IconButton>
-                        )}
-                      </span>
-                      <span className="font-mono text-xs text-white/50">
-                        {lineHeight === null ? t('epub.default') : lineHeight.toFixed(1)}
-                      </span>
-                    </div>
+                  </SliderField>
+                  <SliderField
+                    label={t('epub.lineHeight')}
+                    value={lineHeight === null ? t('epub.default') : lineHeight.toFixed(1)}
+                    action={
+                      lineHeight !== null && (
+                        <IconButton
+                          label={t('epub.resetDefault')}
+                          className="size-6 text-ink-3 hover:bg-overlay hover:text-ink"
+                          onClick={() => update({ epubLineHeight: null })}
+                        >
+                          <ArrowCounterClockwise className="size-3.5" />
+                        </IconButton>
+                      )
+                    }
+                  >
                     <Slider
                       value={lineHeight ?? 1.5}
                       onValueChange={(v) => update({ epubLineHeight: v })}
@@ -207,18 +183,20 @@ export function EpubSettingsPanel({ open, onAlwaysFullscreenChange, onClose }: E
                       step={0.1}
                       label={t('epub.lineHeight')}
                     />
-                  </div>
-                </div>
+                  </SliderField>
+                </FieldGroup>
               </Section>
 
               <Section title={t('panel.behavior')}>
-                <Row label={t('panel.alwaysFullscreen')}>
-                  <Switch
-                    checked={alwaysFullscreen}
-                    onCheckedChange={onAlwaysFullscreenChange}
-                    label={t('panel.alwaysFullscreen')}
-                  />
-                </Row>
+                <RowGroup>
+                  <Row label={t('panel.alwaysFullscreen')}>
+                    <Switch
+                      checked={alwaysFullscreen}
+                      onCheckedChange={onAlwaysFullscreenChange}
+                      label={t('panel.alwaysFullscreen')}
+                    />
+                  </Row>
+                </RowGroup>
               </Section>
             </div>
           </motion.aside>
