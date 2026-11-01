@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import * as RadixDialog from '@radix-ui/react-dialog'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -99,6 +100,21 @@ const TAP_ACTION_CLASSES: Record<TapAction, string> = {
   menu: 'fill-[#6f86a8]',
 }
 
+function PanelSection({ children, className }: { children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion()
+  return (
+    <motion.div
+      initial={reduceMotion ? false : { height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+      className={cn('overflow-hidden', className)}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 /** Samples the real tap resolver, so a preview can never drift from what a tap does. */
 function TapZonePreview({ layout, direction }: { layout: TapZoneLayout; direction: ReadingDirection }) {
   const vertical = direction === 'VERTICAL'
@@ -167,9 +183,17 @@ export function SettingsPanel({
   const background = useReaderSettings((s) => s.background)
   const update = useReaderSettings((s) => s.update)
   const reduceMotion = useReducedMotion()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const returnFocusRef = useRef<HTMLElement | null>(null)
   const { t } = useTranslation('reader')
 
   const webtoon = direction === 'WEBTOON'
+  useEffect(
+    () => () => {
+      ;(returnFocusRef.current ?? document.querySelector<HTMLElement>('[aria-keyshortcuts="s"]'))?.focus()
+    },
+    [],
+  )
 
   const directionOptions = (Object.keys(DIRECTION_LABEL_KEYS) as ReadingDirection[]).map((value) => ({
     value,
@@ -202,40 +226,52 @@ export function SettingsPanel({
   }))
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            key="backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2 }}
-            className="fixed inset-0 z-30 bg-black/40"
-            onClick={onClose}
-          />
-          <motion.aside
-            key="panel"
-            role="dialog"
-            aria-label={t('panel.title')}
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ duration: reduceMotion ? 0 : 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="theme-dark fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-line bg-bg/90 text-ink backdrop-blur-xl"
-          >
-            <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
-              <h2 className="text-[15px] font-semibold">{t('panel.title')}</h2>
-              <IconButton
-                label={t('panel.close')}
-                className="text-ink-2 hover:bg-overlay hover:text-ink"
-                onClick={onClose}
+    <RadixDialog.Root open={open} onOpenChange={(value) => !value && onClose()}>
+      <AnimatePresence>
+        {open && (
+          <RadixDialog.Portal forceMount>
+            <RadixDialog.Overlay asChild>
+              <motion.div
+                className="fixed inset-0 z-30 bg-black/40"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.2 }}
+              />
+            </RadixDialog.Overlay>
+            <RadixDialog.Content
+              asChild
+              onOpenAutoFocus={(event) => {
+                event.preventDefault()
+                returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+                closeRef.current?.focus()
+              }}
+              onCloseAutoFocus={(event) => {
+                event.preventDefault()
+                ;(returnFocusRef.current ?? document.querySelector<HTMLElement>('[aria-keyshortcuts="s"]'))?.focus()
+              }}
+            >
+              <motion.aside
+                initial={{ x: '100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '100%' }}
+                transition={{ duration: reduceMotion ? 0 : 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="theme-dark fixed top-0 right-0 z-30 flex h-full w-80 max-w-[85vw] safe-top safe-bottom flex-col border-l border-line bg-bg/90 text-ink backdrop-blur-xl"
               >
-                <X className="size-4" />
-              </IconButton>
-            </div>
+                <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
+                  <RadixDialog.Title className="text-[15px] font-semibold">{t('panel.title')}</RadixDialog.Title>
+                  <RadixDialog.Close asChild>
+                    <IconButton
+                      ref={closeRef}
+                      label={t('panel.close')}
+                      className="text-ink-2 hover:bg-overlay hover:text-ink"
+                    >
+                      <X className="size-4" />
+                    </IconButton>
+                  </RadixDialog.Close>
+                </div>
 
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
+                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
               <Section title={t('panel.direction')}>
                 <OptionTiles options={directionOptions} value={direction} onChange={onDirectionChange} perRow={4} />
               </Section>
@@ -256,59 +292,71 @@ export function SettingsPanel({
                     perRow={3}
                   />
                 )}
-                {!webtoon && scale === 'SCREEN' && (
-                  <RowGroup>
-                    <Row label={t('panel.stretchSmall')}>
-                      <Switch
-                        checked={stretchSmall}
-                        onCheckedChange={(v) => update({ stretchSmall: v })}
-                        label={t('panel.stretchSmall')}
-                      />
-                    </Row>
-                  </RowGroup>
-                )}
+                <AnimatePresence initial={false}>
+                  {!webtoon && scale === 'SCREEN' && (
+                    <PanelSection className="mt-2">
+                      <RowGroup>
+                        <Row label={t('panel.stretchSmall')}>
+                          <Switch
+                            checked={stretchSmall}
+                            onCheckedChange={(v) => update({ stretchSmall: v })}
+                            label={t('panel.stretchSmall')}
+                          />
+                        </Row>
+                      </RowGroup>
+                    </PanelSection>
+                  )}
+                </AnimatePresence>
               </Section>
 
-              {!webtoon && (
-                <Section title={t('panel.layout')}>
-                  <OptionTiles
-                    options={layoutOptions}
-                    value={pageLayout}
-                    onChange={(v) => update({ pageLayout: v })}
-                    perRow={3}
-                  />
-                  <RowGroup>
-                    <Row label={t('panel.splitWide')}>
-                      <Switch
-                        checked={splitWide}
-                        onCheckedChange={(v) => update({ splitWide: v })}
-                        label={t('panel.splitWide')}
+              <AnimatePresence initial={false}>
+                {!webtoon && (
+                  <PanelSection>
+                    <Section title={t('panel.layout')}>
+                      <OptionTiles
+                        options={layoutOptions}
+                        value={pageLayout}
+                        onChange={(v) => update({ pageLayout: v })}
+                        perRow={3}
                       />
-                    </Row>
-                  </RowGroup>
-                </Section>
-              )}
+                      <RowGroup>
+                        <Row label={t('panel.splitWide')}>
+                          <Switch
+                            checked={splitWide}
+                            onCheckedChange={(v) => update({ splitWide: v })}
+                            label={t('panel.splitWide')}
+                          />
+                        </Row>
+                      </RowGroup>
+                    </Section>
+                  </PanelSection>
+                )}
+              </AnimatePresence>
 
-              {!webtoon && (
-                <Section title={t('panel.tapZones')}>
-                  <OptionTiles
-                    options={tapZoneOptions}
-                    value={tapZones}
-                    onChange={(v) => update({ tapZones: v })}
-                    perRow={3}
-                  />
-                  <div className="flex justify-center gap-4 text-[11px] text-ink-2">
-                    {(Object.keys(TAP_ACTION_CLASSES) as TapAction[]).map((action) => (
-                      <span key={action} className="flex items-center gap-1.5">
-                        <svg aria-hidden viewBox="0 0 1 1" className="size-2.5 rounded-sm">
-                          <rect width={1} height={1} className={TAP_ACTION_CLASSES[action]} />
-                        </svg>
-                        {t(`tapZones.${action}`)}
-                      </span>
-                    ))}
-                  </div>
-                </Section>
-              )}
+              <AnimatePresence initial={false}>
+                {!webtoon && (
+                  <PanelSection>
+                    <Section title={t('panel.tapZones')}>
+                      <OptionTiles
+                        options={tapZoneOptions}
+                        value={tapZones}
+                        onChange={(v) => update({ tapZones: v })}
+                        perRow={3}
+                      />
+                      <div className="flex justify-center gap-4 text-[11px] text-ink-2">
+                        {(Object.keys(TAP_ACTION_CLASSES) as TapAction[]).map((action) => (
+                          <span key={action} className="flex items-center gap-1.5">
+                            <svg aria-hidden viewBox="0 0 1 1" className="size-2.5 rounded-sm">
+                              <rect width={1} height={1} className={TAP_ACTION_CLASSES[action]} />
+                            </svg>
+                            {t(`tapZones.${action}`)}
+                          </span>
+                        ))}
+                      </div>
+                    </Section>
+                  </PanelSection>
+                )}
+              </AnimatePresence>
 
               <Section title={t('panel.behavior')}>
                 <RowGroup>
@@ -344,16 +392,20 @@ export function SettingsPanel({
                       label={t('panel.animations')}
                     />
                   </Row>
-                  {animations && !webtoon && (
-                    <Row label={t('panel.pageTransition')}>
-                      <SegmentedControl
-                        options={transitionOptions}
-                        value={pageTransition}
-                        onChange={(v) => update({ pageTransition: v })}
-                        size="sm"
-                      />
-                    </Row>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {animations && !webtoon && (
+                      <PanelSection>
+                        <Row label={t('panel.pageTransition')}>
+                          <SegmentedControl
+                            options={transitionOptions}
+                            value={pageTransition}
+                            onChange={(v) => update({ pageTransition: v })}
+                            size="sm"
+                          />
+                        </Row>
+                      </PanelSection>
+                    )}
+                  </AnimatePresence>
                   <Row label={t('panel.alwaysFullscreen')}>
                     <Switch
                       checked={alwaysFullscreen}
@@ -364,36 +416,42 @@ export function SettingsPanel({
                 </RowGroup>
               </Section>
 
-              {webtoon && (
-                <Section title={t('common:readingDirection.webtoon')}>
-                  <FieldGroup>
-                    <SliderField label={t('panel.sidePadding')} value={`${continuousPadding}%`}>
-                      <Slider
-                        value={continuousPadding}
-                        onValueChange={(v) => update({ continuousPadding: v })}
-                        min={0}
-                        max={40}
-                        step={5}
-                        label={t('panel.sidePadding')}
-                      />
-                    </SliderField>
-                    <SliderField label={t('panel.pageGap')} value={`${continuousMargin}px`}>
-                      <Slider
-                        value={continuousMargin}
-                        onValueChange={(v) => update({ continuousMargin: v })}
-                        min={0}
-                        max={15}
-                        step={5}
-                        label={t('panel.pageGap')}
-                      />
-                    </SliderField>
-                  </FieldGroup>
-                </Section>
-              )}
-            </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+              <AnimatePresence initial={false}>
+                {webtoon && (
+                  <PanelSection>
+                    <Section title={t('common:readingDirection.webtoon')}>
+                      <FieldGroup>
+                        <SliderField label={t('panel.sidePadding')} value={`${continuousPadding}%`}>
+                          <Slider
+                            value={continuousPadding}
+                            onValueChange={(v) => update({ continuousPadding: v })}
+                            min={0}
+                            max={40}
+                            step={5}
+                            label={t('panel.sidePadding')}
+                          />
+                        </SliderField>
+                        <SliderField label={t('panel.pageGap')} value={`${continuousMargin}px`}>
+                          <Slider
+                            value={continuousMargin}
+                            onValueChange={(v) => update({ continuousMargin: v })}
+                            min={0}
+                            max={15}
+                            step={5}
+                            label={t('panel.pageGap')}
+                          />
+                        </SliderField>
+                      </FieldGroup>
+                    </Section>
+                  </PanelSection>
+                )}
+              </AnimatePresence>
+                  </div>
+              </motion.aside>
+            </RadixDialog.Content>
+          </RadixDialog.Portal>
+        )}
+      </AnimatePresence>
+    </RadixDialog.Root>
   )
 }

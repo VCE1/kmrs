@@ -15,7 +15,7 @@ interface SliderProps {
 export function Slider({ value, onValueChange, min, max, step = 1, label, className, dir }: SliderProps) {
   return (
     <RadixSlider.Root
-      className={cn('relative flex h-5 w-full touch-none items-center select-none', className)}
+      className={cn('relative flex h-5 w-full touch-none items-center select-none pointer-coarse:h-10', className)}
       value={[value]}
       onValueChange={([v]) => onValueChange(v)}
       min={min}

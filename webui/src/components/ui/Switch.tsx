@@ -19,6 +19,7 @@ export function Switch({ checked, onCheckedChange, label, disabled }: SwitchProp
         'relative h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200',
         'data-[state=checked]:bg-accent data-[state=unchecked]:bg-overlay',
         'border border-line disabled:pointer-events-none disabled:opacity-50',
+        'after:absolute after:-inset-2 after:content-[""]',
       )}
     >
       <RadixSwitch.Thumb

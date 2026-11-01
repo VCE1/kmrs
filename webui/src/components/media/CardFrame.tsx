@@ -50,8 +50,8 @@ export const CardMenuButton = forwardRef<HTMLButtonElement, ButtonHTMLAttributes
         ref={ref}
         type="button"
         className={cn(
-          'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-opacity hover:bg-black/80',
-          'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:not-data-[state=open]:opacity-70',
+          'pointer-events-auto absolute right-1 bottom-1 z-10 inline-flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white shadow-sm backdrop-blur-sm transition-[opacity,transform,background-color] duration-150 ease-out-expo hover:bg-black/80 pointer-coarse:size-9',
+          'translate-y-1 scale-90 opacity-0 group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 focus-visible:translate-y-0 focus-visible:scale-100 focus-visible:opacity-100 data-[state=open]:translate-y-0 data-[state=open]:scale-100 data-[state=open]:opacity-100 pointer-coarse:translate-y-0 pointer-coarse:scale-100 pointer-coarse:not-data-[state=open]:opacity-70',
           className,
         )}
         {...rest}

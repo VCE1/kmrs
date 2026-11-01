@@ -521,6 +521,7 @@ function Reader({ bookId }: { bookId: string }) {
         rtl={direction === 'RIGHT_TO_LEFT'}
         incognito={incognito}
         isFullscreen={isFullscreen}
+        settingsOpen={settingsOpen}
         canDownloadFile={canDownload(user)}
         canSetPoster={admin}
         readListContext={context === 'READLIST' && !!contextId}

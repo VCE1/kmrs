@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { FadeKey } from '@/components/ui/FadeKey'
+import { motion, useReducedMotion } from 'motion/react'
 import {
   ArrowDown,
   ArrowLeft,
@@ -57,6 +57,7 @@ interface MetaItem {
 
 /** status / age rating / language / reading direction of a series, as a quiet icon+text line */
 export function SeriesMetaLine({ md, className }: { md: SeriesMetadataDto; className?: string }) {
+  const reduceMotion = useReducedMotion()
   const items: MetaItem[] = []
   const status = seriesStatusLabel(md.status)
   if (status) items.push({ key: 'status', label: status, icon: seriesStatusIcon(md.status), to: `/series?seriesStatus=${md.status}` })
@@ -67,27 +68,32 @@ export function SeriesMetaLine({ md, className }: { md: SeriesMetadataDto; class
   if (direction) items.push({ key: 'direction', label: direction, icon: readingDirectionIcon(md.readingDirection) })
   if (items.length === 0) return null
   return (
-    <FadeKey
-      id={items.map((i) => `${i.key}:${i.label}`).join('|')}
-      className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2', className)}
-    >
-      {items.map((item) =>
-        item.to ? (
-          <Link
-            key={item.key}
-            to={item.to}
-            className="inline-flex items-center gap-1.5 transition-colors hover:text-accent-strong"
-          >
+    <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2', className)}>
+      {items.map((item) => {
+        const content = (
+          <>
             {item.icon}
-            {item.label}
+            <motion.span
+              key={item.label}
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: reduceMotion ? 0 : 0.2 }}
+              className="inline-block"
+            >
+              {item.label}
+            </motion.span>
+          </>
+        )
+        return item.to ? (
+          <Link key={item.key} to={item.to} className="inline-flex items-center gap-1.5 transition-colors hover:text-accent-strong">
+            {content}
           </Link>
         ) : (
           <span key={item.key} className="inline-flex items-center gap-1.5">
-            {item.icon}
-            {item.label}
+            {content}
           </span>
-        ),
-      )}
-    </FadeKey>
+        )
+      })}
+    </div>
   )
 }

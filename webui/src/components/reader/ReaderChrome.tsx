@@ -35,6 +35,7 @@ interface ReaderChromeProps {
   rtl: boolean
   incognito: boolean
   isFullscreen: boolean
+  settingsOpen: boolean
   canDownloadFile: boolean
   canSetPoster: boolean
   readListContext: boolean
@@ -67,6 +68,7 @@ export function ReaderChrome({
   rtl,
   incognito,
   isFullscreen,
+  settingsOpen,
   canDownloadFile,
   canSetPoster,
   readListContext,
@@ -104,7 +106,7 @@ export function ReaderChrome({
             transition={transition}
             className="fixed inset-x-0 top-0 z-20 bg-gradient-to-b from-black/70 to-transparent"
           >
-            <div className="flex items-center gap-0.5 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-10 text-white">
+            <div className="flex items-center gap-0.5 px-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-10 text-white pointer-coarse:gap-1">
               <IconButton label={t('chrome.closeReader')} className={chromeButton} onClick={onClose}>
                 <X className="size-5" />
               </IconButton>
@@ -123,7 +125,13 @@ export function ReaderChrome({
               <IconButton label={t('chrome.pages')} className={chromeButton} onClick={onToggleExplorer}>
                 <SquaresFour className="size-5" />
               </IconButton>
-              <IconButton label={t('chrome.settings')} className={chromeButton} onClick={onToggleSettings}>
+              <IconButton
+                label={t('chrome.settings')}
+                active={settingsOpen}
+                aria-keyshortcuts="s"
+                className={chromeButton}
+                onClick={onToggleSettings}
+              >
                 <SlidersHorizontal className="size-5" />
               </IconButton>
               <IconButton label={t('shortcuts.title')} className={chromeButton} onClick={onToggleHelp}>

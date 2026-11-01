@@ -13,8 +13,8 @@ export function LanguageSwitcher({ className, size = 'md' }: { className?: strin
         <button
           type="button"
           className={cn(
-            'flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface font-medium whitespace-nowrap text-ink-3 transition-colors hover:text-ink-2',
-            size === 'sm' ? 'px-2.5 py-1 text-xs' : 'px-3 py-1.5 text-[13px]',
+            'flex cursor-pointer items-center gap-1.5 rounded-lg border border-line bg-surface font-medium whitespace-nowrap text-ink-3 transition-colors hover:text-ink-2 data-[state=open]:border-line-strong data-[state=open]:bg-overlay data-[state=open]:text-ink',
+            size === 'sm' ? 'h-8 px-2.5 text-xs pointer-coarse:h-10' : 'h-10 px-3 text-[13px]',
             className,
           )}
         >
