@@ -12,6 +12,8 @@
 # same as the komga image), and prepares the mount points for the target stage.
 FROM --platform=$BUILDPLATFORM debian:trixie-slim AS base
 ARG TARGETARCH
+ARG PDFIUM_TAG=chromium%2F8125
+ARG KEPUBIFY_TAG=v4.0.4
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && case "$TARGETARCH" in \
@@ -19,10 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
       arm64) arch=arm64; kepub=arm64 ;; \
       *) echo "unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
-    curl -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-$arch.tgz" \
+    curl -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/download/$PDFIUM_TAG/pdfium-linux-$arch.tgz" \
       | tar -xz -C /tmp --strip-components=1 lib/libpdfium.so \
  && test -s /tmp/libpdfium.so \
- && curl -fsSL "https://github.com/pgaskin/kepubify/releases/latest/download/kepubify-linux-$kepub" -o /tmp/kepubify \
+ && curl -fsSL "https://github.com/pgaskin/kepubify/releases/download/$KEPUBIFY_TAG/kepubify-linux-$kepub" -o /tmp/kepubify \
  && test -s /tmp/kepubify \
  && install -d -m 777 /staging/config /staging/data
 
