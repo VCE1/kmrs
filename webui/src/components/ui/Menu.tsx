@@ -73,6 +73,26 @@ export function MenuItem({
   )
 }
 
+export function MenuSub({ trigger, children }: { trigger: ReactNode; children: ReactNode }) {
+  return (
+    <RadixMenu.Sub>
+      <RadixMenu.SubTrigger
+        className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-ink transition-colors outline-none select-none data-[highlighted]:bg-accent-soft data-[highlighted]:text-accent-strong data-[state=open]:bg-accent-soft data-[state=open]:text-accent-strong"
+      >
+        {trigger}
+      </RadixMenu.SubTrigger>
+      <RadixMenu.Portal>
+        <RadixMenu.SubContent
+          sideOffset={6}
+          className="z-50 min-w-44 overflow-hidden rounded-xl border border-line bg-raised p-1 shadow-pop data-[state=open]:animate-menu-in data-[state=closed]:animate-menu-out"
+        >
+          {children}
+        </RadixMenu.SubContent>
+      </RadixMenu.Portal>
+    </RadixMenu.Sub>
+  )
+}
+
 export function MenuSeparator() {
   return <RadixMenu.Separator className="mx-1 my-1 h-px bg-line" />
 }

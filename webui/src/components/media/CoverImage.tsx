@@ -46,8 +46,7 @@ export function CoverImage({ src, alt, className, blurred, eager, referrerPolicy
           onError={xf.onError}
           onTransitionEnd={xf.onTransitionEnd}
           className={cn(
-            // scale is a separate CSS property in Tailwind v4; leaving it out of the transition list makes the hover zoom snap
-            'absolute inset-0 size-full object-cover transition-[opacity,transform,scale,filter] duration-300 ease-out-expo group-hover:scale-[1.05] group-hover:brightness-[1.08]',
+            'absolute inset-0 size-full object-cover transition-opacity duration-200',
             xf.loaded ? 'opacity-100' : 'opacity-0',
             blurred && 'blur-[5px] scale-[1.04]',
           )}

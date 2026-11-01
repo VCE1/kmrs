@@ -17,6 +17,7 @@ import {
   FileArrowDown,
   FileMagnifyingGlass,
   ChartLineUp,
+  Check,
   Funnel,
   Gauge,
   GearSix,
@@ -40,6 +41,7 @@ import {
   Sun,
   Tag,
   TrayArrowDown,
+  Translate,
   User,
   UserCircle,
   Users,
@@ -53,6 +55,7 @@ import { releasesApi } from '@/lib/api/releases'
 import { usersApi } from '@/lib/api/users'
 import { serverApi } from '@/lib/api/server'
 import { isAdmin, useAuthStore } from '@/lib/store/auth'
+import { SUPPORTED_LANGUAGES } from '@/lib/i18n'
 import { useUiStore } from '@/lib/store/ui'
 import { usePinnedLibraries } from '@/lib/store/clientSettings'
 import { useTaskQueue } from '@/lib/store/taskQueue'
@@ -61,7 +64,7 @@ import { taskTypeLabel } from '@/components/admin/server/format'
 import { LogoMark } from '@/components/LogoMark'
 import { IconButton } from '@/components/ui/IconButton'
 import { Tooltip } from '@/components/ui/Tooltip'
-import { Menu, MenuItem, MenuLabel, MenuSeparator } from '@/components/ui/Menu'
+import { Menu, MenuItem, MenuLabel, MenuSeparator, MenuSub } from '@/components/ui/Menu'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Switch } from '@/components/ui/Switch'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -332,7 +335,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarFooter() {
-  const { t } = useTranslation('layout')
+  const { t, i18n } = useTranslation('layout')
+  const currentLanguage = SUPPORTED_LANGUAGES.find((language) => language.code === i18n.language) ?? SUPPORTED_LANGUAGES[0]
   const user = useAuthStore((s) => s.user)
   const clear = useAuthStore((s) => s.clear)
   const navigate = useNavigate()
@@ -386,6 +390,25 @@ function SidebarFooter() {
         <MenuItem onSelect={() => navigate('/account/profile')}>
           <GearSix className="size-4" /> {t('nav.accountSettings')}
         </MenuItem>
+        <MenuSub
+          trigger={
+            <>
+              <Translate className="size-4" />
+              <span className="flex-1">{t('account:language.title')}</span>
+              <span className="max-w-24 truncate text-xs text-ink-3">{currentLanguage.label}</span>
+              <CaretRight className="size-3" />
+            </>
+          }
+        >
+          <div className="max-h-80 overflow-y-auto">
+            {SUPPORTED_LANGUAGES.map((language) => (
+              <MenuItem key={language.code} onSelect={() => void i18n.changeLanguage(language.code)}>
+                {language.label}
+                {language.code === currentLanguage.code && <Check className="ml-auto size-3.5" />}
+              </MenuItem>
+            ))}
+          </div>
+        </MenuSub>
         {(info?.version || update) && (
           <>
             <MenuSeparator />
