@@ -111,6 +111,7 @@
     "background": "Фон",
     "backgroundLabel": "Фон {{color}}",
     "backgrounds": {
+      "auto": "Как в теме",
       "black": "Чёрный",
       "gray": "Серый",
       "white": "Белый"

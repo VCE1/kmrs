@@ -110,6 +110,7 @@
     "background": "Arrière-plan",
     "backgroundLabel": "Arrière-plan {{color}}",
     "backgrounds": {
+      "auto": "Suivre le thème",
       "black": "Noir",
       "gray": "Gris",
       "white": "Blanc"

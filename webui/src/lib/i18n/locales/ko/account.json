@@ -108,6 +108,7 @@
     "background": "배경",
     "backgroundLabel": "배경 {{color}}",
     "backgrounds": {
+      "auto": "테마 따라가기",
       "black": "검정",
       "gray": "회색",
       "white": "흰색"

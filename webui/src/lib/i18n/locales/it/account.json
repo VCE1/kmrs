@@ -110,6 +110,7 @@
     "background": "Sfondo",
     "backgroundLabel": "Sfondo {{color}}",
     "backgrounds": {
+      "auto": "Segui il tema",
       "black": "Nero",
       "gray": "Grigio",
       "white": "Bianco"

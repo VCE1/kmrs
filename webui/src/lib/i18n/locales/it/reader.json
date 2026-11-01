@@ -62,7 +62,9 @@
     "alwaysFullscreen": "Sempre a schermo intero",
     "sidePadding": "Margini laterali",
     "pageGap": "Spazio tra pagine",
-    "splitWide": "Dividi le pagine larghe"
+    "splitWide": "Dividi le pagine larghe",
+    "stretchSmall": "Ingrandisci le pagine piccole",
+    "tapZones": "Zone di tocco"
   },
   "scale": {
     "screen": "Adatta allo schermo",
@@ -76,6 +78,25 @@
     "slide": "Scorrimento",
     "fade": "Dissolvenza"
   },
+  "tapZones": {
+    "standard": "Standard",
+    "reversed": "Invertito",
+    "edge": "Bordi sottili",
+    "kindle": "Kindle",
+    "off": "Disattivato",
+    "previous": "Precedente",
+    "next": "Successiva",
+    "menu": "Menu"
+  },
+  "transition": {
+    "finished": "Finito",
+    "upNext": "Prossimo",
+    "previousBook": "Libro precedente",
+    "atStart": "Inizio di questo libro",
+    "noNext": "Nessun libro successivo",
+    "noPrevious": "Nessun libro precedente",
+    "turnToContinue": "Volta pagina per continuare"
+  },
   "layout": {
     "single": "Pagina singola",
     "double": "Pagine doppie",
@@ -84,7 +105,8 @@
   "background": {
     "black": "Nero",
     "gray": "Grigio",
-    "white": "Bianco"
+    "white": "Bianco",
+    "auto": "Segui il tema"
   },
   "shortcuts": {
     "title": "Scorciatoie da tastiera",

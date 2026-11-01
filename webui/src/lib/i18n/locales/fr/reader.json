@@ -62,7 +62,9 @@
     "alwaysFullscreen": "Toujours en plein écran",
     "sidePadding": "Marge latérale",
     "pageGap": "Écart entre pages",
-    "splitWide": "Découper les pages larges"
+    "splitWide": "Découper les pages larges",
+    "stretchSmall": "Agrandir les petites pages",
+    "tapZones": "Zones de toucher"
   },
   "scale": {
     "screen": "Ajuster à l'écran",
@@ -76,6 +78,25 @@
     "slide": "Glissement",
     "fade": "Fondu"
   },
+  "tapZones": {
+    "standard": "Standard",
+    "reversed": "Inversé",
+    "edge": "Bords fins",
+    "kindle": "Kindle",
+    "off": "Désactivé",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "menu": "Menu"
+  },
+  "transition": {
+    "finished": "Terminé",
+    "upNext": "À suivre",
+    "previousBook": "Livre précédent",
+    "atStart": "Début de ce livre",
+    "noNext": "Aucun livre suivant",
+    "noPrevious": "Aucun livre précédent",
+    "turnToContinue": "Tournez la page pour continuer"
+  },
   "layout": {
     "single": "Page simple",
     "double": "Pages doubles",
@@ -84,7 +105,8 @@
   "background": {
     "black": "Noir",
     "gray": "Gris",
-    "white": "Blanc"
+    "white": "Blanc",
+    "auto": "Suivre le thème"
   },
   "shortcuts": {
     "title": "Raccourcis clavier",

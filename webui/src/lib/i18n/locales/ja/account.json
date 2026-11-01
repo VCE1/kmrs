@@ -108,6 +108,7 @@
     "background": "背景",
     "backgroundLabel": "背景 {{color}}",
     "backgrounds": {
+      "auto": "テーマに合わせる",
       "black": "黒",
       "gray": "グレー",
       "white": "白"

@@ -62,7 +62,9 @@
     "alwaysFullscreen": "Immer Vollbild",
     "sidePadding": "Seitenrand",
     "pageGap": "Seitenabstand",
-    "splitWide": "Breite Seiten teilen"
+    "splitWide": "Breite Seiten teilen",
+    "stretchSmall": "Kleine Seiten vergrößern",
+    "tapZones": "Tippbereiche"
   },
   "scale": {
     "screen": "An Bildschirm anpassen",
@@ -76,6 +78,25 @@
     "slide": "Schieben",
     "fade": "Überblenden"
   },
+  "tapZones": {
+    "standard": "Standard",
+    "reversed": "Vertauscht",
+    "edge": "Schmale Ränder",
+    "kindle": "Kindle",
+    "off": "Aus",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "menu": "Menü"
+  },
+  "transition": {
+    "finished": "Ausgelesen",
+    "upNext": "Als Nächstes",
+    "previousBook": "Vorheriges Buch",
+    "atStart": "Anfang dieses Buchs",
+    "noNext": "Kein weiteres Buch",
+    "noPrevious": "Kein vorheriges Buch",
+    "turnToContinue": "Zum Fortfahren umblättern"
+  },
   "layout": {
     "single": "Einzelseite",
     "double": "Doppelseiten",
@@ -84,7 +105,8 @@
   "background": {
     "black": "Schwarz",
     "gray": "Grau",
-    "white": "Weiß"
+    "white": "Weiß",
+    "auto": "Design folgen"
   },
   "shortcuts": {
     "title": "Tastenkürzel",

@@ -62,7 +62,9 @@
     "alwaysFullscreen": "常に全画面",
     "sidePadding": "左右の余白",
     "pageGap": "ページ間隔",
-    "splitWide": "見開きページを分割"
+    "splitWide": "見開きページを分割",
+    "stretchSmall": "小さいページを拡大",
+    "tapZones": "タップ領域"
   },
   "scale": {
     "screen": "画面に合わせる",
@@ -76,6 +78,25 @@
     "slide": "スライド",
     "fade": "フェード"
   },
+  "tapZones": {
+    "standard": "標準",
+    "reversed": "左右反転",
+    "edge": "細い端",
+    "kindle": "Kindle",
+    "off": "オフ",
+    "previous": "前へ",
+    "next": "次へ",
+    "menu": "メニュー"
+  },
+  "transition": {
+    "finished": "読了",
+    "upNext": "次の本",
+    "previousBook": "前の本",
+    "atStart": "この本の先頭です",
+    "noNext": "次の本はありません",
+    "noPrevious": "前の本はありません",
+    "turnToContinue": "ページをめくって続ける"
+  },
   "layout": {
     "single": "単ページ",
     "double": "見開き",
@@ -84,7 +105,8 @@
   "background": {
     "black": "黒",
     "gray": "グレー",
-    "white": "白"
+    "white": "白",
+    "auto": "テーマに合わせる"
   },
   "shortcuts": {
     "title": "キーボードショートカット",

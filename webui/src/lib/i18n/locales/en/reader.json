@@ -62,7 +62,9 @@
     "alwaysFullscreen": "Always fullscreen",
     "sidePadding": "Side padding",
     "pageGap": "Page gap",
-    "splitWide": "Split wide pages"
+    "splitWide": "Split wide pages",
+    "stretchSmall": "Enlarge small pages",
+    "tapZones": "Tap zones"
   },
   "scale": {
     "screen": "Fit screen",
@@ -76,6 +78,25 @@
     "slide": "Slide",
     "fade": "Fade"
   },
+  "tapZones": {
+    "standard": "Standard",
+    "reversed": "Reversed",
+    "edge": "Thin edges",
+    "kindle": "Kindle",
+    "off": "Off",
+    "previous": "Previous",
+    "next": "Next",
+    "menu": "Menu"
+  },
+  "transition": {
+    "finished": "Finished",
+    "upNext": "Up next",
+    "previousBook": "Previous book",
+    "atStart": "Start of this book",
+    "noNext": "No next book",
+    "noPrevious": "No previous book",
+    "turnToContinue": "Turn the page to continue"
+  },
   "layout": {
     "single": "Single page",
     "double": "Double pages",
@@ -84,7 +105,8 @@
   "background": {
     "black": "Black",
     "gray": "Gray",
-    "white": "White"
+    "white": "White",
+    "auto": "Follow theme"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

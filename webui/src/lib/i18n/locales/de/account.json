@@ -109,6 +109,7 @@
     "background": "Hintergrund",
     "backgroundLabel": "Hintergrund {{color}}",
     "backgrounds": {
+      "auto": "Design folgen",
       "black": "Schwarz",
       "gray": "Grau",
       "white": "Weiß"

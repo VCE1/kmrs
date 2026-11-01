@@ -62,7 +62,9 @@
     "alwaysFullscreen": "항상 전체 화면",
     "sidePadding": "좌우 여백",
     "pageGap": "페이지 간격",
-    "splitWide": "넓은 페이지 분할"
+    "splitWide": "넓은 페이지 분할",
+    "stretchSmall": "작은 페이지 확대",
+    "tapZones": "탭 영역"
   },
   "scale": {
     "screen": "화면에 맞춤",
@@ -76,6 +78,25 @@
     "slide": "슬라이드",
     "fade": "페이드"
   },
+  "tapZones": {
+    "standard": "표준",
+    "reversed": "좌우 반전",
+    "edge": "좁은 가장자리",
+    "kindle": "Kindle",
+    "off": "끔",
+    "previous": "이전",
+    "next": "다음",
+    "menu": "메뉴"
+  },
+  "transition": {
+    "finished": "다 읽음",
+    "upNext": "다음 책",
+    "previousBook": "이전 책",
+    "atStart": "이 책의 시작입니다",
+    "noNext": "다음 책이 없습니다",
+    "noPrevious": "이전 책이 없습니다",
+    "turnToContinue": "페이지를 넘겨 계속"
+  },
   "layout": {
     "single": "한 페이지",
     "double": "두 페이지",
@@ -84,7 +105,8 @@
   "background": {
     "black": "검정",
     "gray": "회색",
-    "white": "흰색"
+    "white": "흰색",
+    "auto": "테마 따라가기"
   },
   "shortcuts": {
     "title": "키보드 단축키",

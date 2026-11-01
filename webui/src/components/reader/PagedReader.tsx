@@ -10,12 +10,14 @@ import {
 } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
-import type { ReadingDirection } from '@/lib/api/types'
+import type { BookDto, ReadingDirection } from '@/lib/api/types'
 import { useReaderSettings, type ScaleType } from '@/lib/store/readerSettings'
 import { buildSpreads, isLandscape, measureWhenKnown, slotAspectRatio, type SpreadPage } from '@/lib/utils/spreads'
 import { cn } from '@/lib/utils/cn'
+import { BookTransition } from './BookTransition'
 import { useWindowKeys } from './keys'
 import { PageImage } from './PageImage'
+import { tapAction } from './tapZones'
 import { usePinchZoom } from './usePinchZoom'
 
 interface PagedReaderProps {
@@ -24,8 +26,11 @@ interface PagedReaderProps {
   direction: ReadingDirection
   onPageChange: (page: number) => void
   onToggleChrome: () => void
-  onJumpPrevious: () => void
-  onJumpNext: () => void
+  /** the book the transition pages name, plus its neighbours; null past either end of the list */
+  book: BookDto
+  previousBook: BookDto | null
+  nextBook: BookDto | null
+  onLeaveBook: (direction: 'previous' | 'next') => void
   onMeasure: (page: number, width: number, height: number) => void
   /** shown half of a split wide page; owned by the caller so progress saving can see it */
   splitHalf: 0 | 1
@@ -57,13 +62,14 @@ function slotClass(scale: ScaleType, double: boolean, measured: boolean): string
   }
 }
 
-function slotStyle(scale: ScaleType, double: boolean, p: SpreadPage): CSSProperties {
+function slotStyle(scale: ScaleType, double: boolean, stretchSmall: boolean, p: SpreadPage): CSSProperties {
   const measured = p.width && p.height
   if (scale === 'ORIGINAL' && measured) return { width: p.width, height: p.height }
   if (scale === 'WIDTH_SHRINK_ONLY' && measured)
     return { width: `min(${double ? '50%' : '100%'}, ${p.width}px)`, aspectRatio: slotAspectRatio(p) }
-  // capped at the natural height so a page smaller than the viewport is not upscaled
-  if (scale === 'SCREEN' && measured) return { height: `min(100dvh, ${p.height}px)`, aspectRatio: slotAspectRatio(p) }
+  // capped at the natural height so a page smaller than the viewport is not upscaled unless asked
+  if (scale === 'SCREEN' && measured)
+    return { height: stretchSmall ? '100dvh' : `min(100dvh, ${p.height}px)`, aspectRatio: slotAspectRatio(p) }
   return { aspectRatio: slotAspectRatio(p) }
 }
 
@@ -111,10 +117,12 @@ export function PagedReader({
   pages,
   page,
   direction,
+  book,
+  previousBook,
+  nextBook,
   onPageChange,
   onToggleChrome,
-  onJumpPrevious,
-  onJumpNext,
+  onLeaveBook,
   onMeasure,
   splitHalf,
   onSplitHalfChange,
@@ -122,9 +130,11 @@ export function PagedReader({
   const scale = useReaderSettings((s) => s.scale)
   const pageLayout = useReaderSettings((s) => s.pageLayout)
   const splitWide = useReaderSettings((s) => s.splitWide)
+  const stretchSmall = useReaderSettings((s) => s.stretchSmall)
   const animations = useReaderSettings((s) => s.animations)
   const pageTransition = useReaderSettings((s) => s.pageTransition)
   const swipe = useReaderSettings((s) => s.swipe)
+  const tapZones = useReaderSettings((s) => s.tapZones)
   const reduceMotion = useReducedMotion()
   const { t } = useTranslation('reader')
 
@@ -143,6 +153,11 @@ export function PagedReader({
   // in single-page layout a wide page turns in two halves instead of one spread step
   const splitOn = splitWide && pageLayout === 'SINGLE_PAGE'
   const curSpread = spreads[spreadIndex]
+  const atFirst = spreadIndex === 0
+  const atLast = spreadIndex === spreads.length - 1
+  // the transition page shown past an end of the book; any move away from that end drops it
+  const [transition, setTransition] = useState<'previous' | 'next' | null>(null)
+  if ((transition === 'previous' && !atFirst) || (transition === 'next' && !atLast)) setTransition(null)
   const curSplittable =
     splitOn && curSpread?.length === 1 && !curSpread[0].blank && isLandscape(curSpread[0])
   // revealing a spread that is still loading or decoding drops to the bare background, and a
@@ -190,29 +205,28 @@ export function PagedReader({
   // layout shifts (page turn, fit mode, direction, spread re-pairing, half swap) leave stale pan offsets behind
   useLayoutEffect(() => {
     resetPinch()
-  }, [spreadIndex, spreadKey, splitHalf, splitOn, scale, pageLayout, direction, resetPinch])
+  }, [spreadIndex, spreadKey, splitHalf, splitOn, scale, pageLayout, direction, transition, resetPinch])
 
   const goSpread = useCallback((i: number) => onPageChange(spreadCurrentPage(spreads[i])), [spreads, onPageChange])
   const prev = useCallback(() => {
-    if (curSplittable && splitHalf === 1) {
+    if (transition === 'next') setTransition(null)
+    else if (transition === 'previous') onLeaveBook('previous')
+    else if (curSplittable && splitHalf === 1) {
       onSplitHalfChange(0)
-      return
-    }
-    if (spreadIndex > 0) {
+    } else if (spreadIndex > 0) {
       const target = spreads[spreadIndex - 1]
       goSpread(spreadIndex - 1)
       // landing on a wide page from after it means its second half shows first
       if (splitOn && target.length === 1 && !target[0].blank && isLandscape(target[0])) onSplitHalfChange(1)
-    } else onJumpPrevious()
-  }, [curSplittable, splitHalf, splitOn, spreadIndex, spreads, goSpread, onJumpPrevious, onSplitHalfChange])
+    } else setTransition('previous')
+  }, [transition, curSplittable, splitHalf, splitOn, spreadIndex, spreads, goSpread, onLeaveBook, onSplitHalfChange])
   const next = useCallback(() => {
-    if (curSplittable && splitHalf === 0) {
-      onSplitHalfChange(1)
-      return
-    }
-    if (spreadIndex < spreads.length - 1) goSpread(spreadIndex + 1)
-    else onJumpNext()
-  }, [curSplittable, splitHalf, spreadIndex, spreads.length, goSpread, onJumpNext, onSplitHalfChange])
+    if (transition === 'previous') setTransition(null)
+    else if (transition === 'next') onLeaveBook('next')
+    else if (curSplittable && splitHalf === 0) onSplitHalfChange(1)
+    else if (spreadIndex < spreads.length - 1) goSpread(spreadIndex + 1)
+    else setTransition('next')
+  }, [transition, curSplittable, splitHalf, spreadIndex, spreads.length, goSpread, onLeaveBook, onSplitHalfChange])
   const turnLeft = useCallback(() => {
     if (!vertical) (flip ? next : prev)()
   }, [vertical, flip, next, prev])
@@ -326,15 +340,20 @@ export function PagedReader({
       return
     }
     const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = vertical ? (e.clientY - rect.top) / rect.height : (e.clientX - rect.left) / rect.width
-    if (ratio < 0.25) (vertical ? prev : turnLeft)()
-    else if (ratio > 0.75) (vertical ? next : turnRight)()
+    const x = (e.clientX - rect.left) / rect.width
+    const y = (e.clientY - rect.top) / rect.height
+    const action = vertical ? tapAction(tapZones, y, x, false) : tapAction(tapZones, x, y, flip)
+    if (action === 'previous') prev()
+    else if (action === 'next') next()
     else onToggleChrome()
   }
 
-  const transform = vertical
-    ? `translateY(${-shownIndex * 100}%)`
-    : `translateX(${(flip ? 1 : -1) * shownIndex * 100}%)`
+  const offset = (slot: number) =>
+    vertical ? `translateY(${slot * 100}%)` : `translateX(${(flip ? -1 : 1) * slot * 100}%)`
+  // transition pages have no spread of their own: they sit one slot past either end of the track
+  const transitionSlot = (dir: 'previous' | 'next') => (dir === 'next' ? spreads.length : -1)
+  const transform = offset(-(transition ? transitionSlot(transition) : shownIndex))
+  const hiddenSlide = 'pointer-events-none z-10 opacity-0 transition-opacity duration-200'
 
   return (
     <div
@@ -356,14 +375,10 @@ export function PagedReader({
           // remounted on a mode switch, or every slide would fade out from the strip's opaque state
           key={crossfade ? 'crossfade' : 'strip'}
           className={cn(
-            'h-full w-full',
-            crossfade
-              ? 'relative'
-              : cn(
-                  'flex',
-                  vertical ? 'flex-col' : flip && 'flex-row-reverse',
-                  animate && 'transition-transform duration-300 ease-[cubic-bezier(.25,.8,.5,1)]',
-                ),
+            'relative h-full w-full',
+            !crossfade && 'flex',
+            !crossfade && (vertical ? 'flex-col' : flip && 'flex-row-reverse'),
+            !crossfade && animate && 'transition-transform duration-300 ease-[cubic-bezier(.25,.8,.5,1)]',
           )}
           style={crossfade ? undefined : { transform }}
         >
@@ -379,7 +394,7 @@ export function PagedReader({
                   // the new page is opaque at once under the fading old one, so the
                   // reader background never shows through mid-turn
                   crossfade && 'absolute inset-0',
-                  crossfade && i !== shownIndex && 'pointer-events-none z-10 opacity-0 transition-opacity duration-200',
+                  crossfade && (transition !== null || i !== shownIndex) && hiddenSlide,
                 )}
               >
                 <div
@@ -414,7 +429,7 @@ export function PagedReader({
                     // every slot keeps an aspect-ratio box (real dims once measured, a 2:3
                     // fallback before) so an unloaded page holds its own half instead of
                     // collapsing and letting the loaded mate sit in the spread's middle
-                    const dim = slotStyle(scale, double, p)
+                    const dim = slotStyle(scale, double, stretchSmall, p)
                     if (!near && !p.blank) return <div key={p.number} aria-hidden className={cls} style={dim} />
                     if (p.blank)
                       return (
@@ -437,6 +452,24 @@ export function PagedReader({
               </div>
             )
           })}
+          {(['previous', 'next'] as const).map(
+            (dir) =>
+              (dir === 'next' ? atLast : atFirst) && (
+                <div
+                  key={dir}
+                  className={cn('absolute inset-0', crossfade && transition !== dir && hiddenSlide)}
+                  style={crossfade ? undefined : { transform: offset(transitionSlot(dir)) }}
+                >
+                  <BookTransition
+                    direction={dir}
+                    book={book}
+                    target={dir === 'next' ? nextBook : previousBook}
+                    flip={flip}
+                    onLeave={() => onLeaveBook(dir)}
+                  />
+                </div>
+              ),
+          )}
         </div>
       </div>
     </div>

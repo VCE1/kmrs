@@ -108,6 +108,7 @@
     "background": "背景",
     "backgroundLabel": "背景 {{color}}",
     "backgrounds": {
+      "auto": "跟隨主題",
       "black": "黑色",
       "gray": "灰色",
       "white": "白色"

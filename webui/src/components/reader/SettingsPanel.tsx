@@ -10,6 +10,7 @@ import {
   ArrowsVertical,
   BookOpen,
   BookOpenText,
+  CircleHalf,
   CornersOut,
   File,
   FrameCorners,
@@ -24,6 +25,7 @@ import {
   type PageTransition,
   type ReaderBackground,
   type ScaleType,
+  type TapZoneLayout,
 } from '@/lib/store/readerSettings'
 import type { PagedReaderLayout } from '@/lib/utils/spreads'
 import { IconButton } from '@/components/ui/IconButton'
@@ -32,6 +34,7 @@ import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
 import { FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
 import { cn } from '@/lib/utils/cn'
+import { tapAction, type TapAction } from './tapZones'
 
 const SCALE_LABEL_KEYS: Record<ScaleType, string> = {
   SCREEN: 'scale.screen',
@@ -58,6 +61,7 @@ const BACKGROUND_LABEL_KEYS: Record<ReaderBackground, string> = {
   BLACK: 'background.black',
   GRAY: 'background.gray',
   WHITE: 'background.white',
+  AUTO: 'background.auto',
 }
 
 const SCALE_ICONS: Record<ScaleType, ReactNode> = {
@@ -81,10 +85,51 @@ const DIRECTION_ICONS: Record<ReadingDirection, ReactNode> = {
   WEBTOON: <Scroll />,
 }
 
+const TAP_ZONE_LABEL_KEYS: Record<TapZoneLayout, string> = {
+  STANDARD: 'tapZones.standard',
+  REVERSED: 'tapZones.reversed',
+  EDGE: 'tapZones.edge',
+  KINDLE: 'tapZones.kindle',
+  OFF: 'tapZones.off',
+}
+
+const TAP_ACTION_CLASSES: Record<TapAction, string> = {
+  previous: 'fill-[#a4706f]',
+  next: 'fill-[#6f9a80]',
+  menu: 'fill-[#6f86a8]',
+}
+
+/** Samples the real tap resolver, so a preview can never drift from what a tap does. */
+function TapZonePreview({ layout, direction }: { layout: TapZoneLayout; direction: ReadingDirection }) {
+  const vertical = direction === 'VERTICAL'
+  // fine enough to land on every zone boundary: 5% along the turn axis, 25% across it
+  const [columns, rows] = vertical ? [4, 20] : [20, 4]
+  const cells = Array.from({ length: columns * rows }, (_, i) => {
+    const x = i % columns
+    const y = Math.floor(i / columns)
+    const [left, top] = [(x + 0.5) / columns, (y + 0.5) / rows]
+    const action = vertical
+      ? tapAction(layout, top, left, false)
+      : tapAction(layout, left, top, direction === 'RIGHT_TO_LEFT')
+    return <rect key={i} x={x} y={y} width={1} height={1} className={TAP_ACTION_CLASSES[action]} />
+  })
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${columns} ${rows}`}
+      preserveAspectRatio="none"
+      shapeRendering="crispEdges"
+      className="aspect-[2/3] h-12 rounded-sm landscape:aspect-[3/2]"
+    >
+      {cells}
+    </svg>
+  )
+}
+
 const PAGED_SCALE_VALUES: ScaleType[] = ['SCREEN', 'WIDTH', 'WIDTH_SHRINK_ONLY', 'HEIGHT', 'ORIGINAL']
 const CONTINUOUS_SCALE_VALUES: ContinuousScaleType[] = ['WIDTH', 'ORIGINAL']
 const LAYOUT_VALUES: PagedReaderLayout[] = ['SINGLE_PAGE', 'DOUBLE_PAGES', 'DOUBLE_NO_COVER']
-const BACKGROUND_VALUES: ReaderBackground[] = ['BLACK', 'GRAY', 'WHITE']
+const BACKGROUND_VALUES: ReaderBackground[] = ['AUTO', 'BLACK', 'GRAY', 'WHITE']
 const PAGE_TRANSITION_VALUES: PageTransition[] = ['AUTO', 'SLIDE', 'FADE']
 const PAGE_TRANSITION_LABEL_KEYS: Record<PageTransition, string> = {
   AUTO: 'pageTransition.auto',
@@ -114,6 +159,8 @@ export function SettingsPanel({
   const continuousPadding = useReaderSettings((s) => s.continuousPadding)
   const continuousMargin = useReaderSettings((s) => s.continuousMargin)
   const swipe = useReaderSettings((s) => s.swipe)
+  const tapZones = useReaderSettings((s) => s.tapZones)
+  const stretchSmall = useReaderSettings((s) => s.stretchSmall)
   const animations = useReaderSettings((s) => s.animations)
   const pageTransition = useReaderSettings((s) => s.pageTransition)
   const alwaysFullscreen = useReaderSettings((s) => s.alwaysFullscreen)
@@ -143,6 +190,11 @@ export function SettingsPanel({
     value,
     label: t(LAYOUT_LABEL_KEYS[value]),
     icon: LAYOUT_ICONS[value],
+  }))
+  const tapZoneOptions = (Object.keys(TAP_ZONE_LABEL_KEYS) as TapZoneLayout[]).map((value) => ({
+    value,
+    label: t(TAP_ZONE_LABEL_KEYS[value]),
+    icon: <TapZonePreview layout={value} direction={direction} />,
   }))
   const transitionOptions = PAGE_TRANSITION_VALUES.map((value) => ({
     value,
@@ -204,6 +256,17 @@ export function SettingsPanel({
                     perRow={3}
                   />
                 )}
+                {!webtoon && scale === 'SCREEN' && (
+                  <RowGroup>
+                    <Row label={t('panel.stretchSmall')}>
+                      <Switch
+                        checked={stretchSmall}
+                        onCheckedChange={(v) => update({ stretchSmall: v })}
+                        label={t('panel.stretchSmall')}
+                      />
+                    </Row>
+                  </RowGroup>
+                )}
               </Section>
 
               {!webtoon && (
@@ -226,6 +289,27 @@ export function SettingsPanel({
                 </Section>
               )}
 
+              {!webtoon && (
+                <Section title={t('panel.tapZones')}>
+                  <OptionTiles
+                    options={tapZoneOptions}
+                    value={tapZones}
+                    onChange={(v) => update({ tapZones: v })}
+                    perRow={3}
+                  />
+                  <div className="flex justify-center gap-4 text-[11px] text-ink-2">
+                    {(Object.keys(TAP_ACTION_CLASSES) as TapAction[]).map((action) => (
+                      <span key={action} className="flex items-center gap-1.5">
+                        <svg aria-hidden viewBox="0 0 1 1" className="size-2.5 rounded-sm">
+                          <rect width={1} height={1} className={TAP_ACTION_CLASSES[action]} />
+                        </svg>
+                        {t(`tapZones.${action}`)}
+                      </span>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
               <Section title={t('panel.behavior')}>
                 <RowGroup>
                   <Row label={t('panel.background')}>
@@ -239,11 +323,14 @@ export function SettingsPanel({
                           title={t(BACKGROUND_LABEL_KEYS[value])}
                           onClick={() => update({ background: value })}
                           className={cn(
-                            'size-6 cursor-pointer rounded-full border border-line-strong',
+                            'size-6 cursor-pointer rounded-full text-ink-2',
+                            value !== 'AUTO' && 'border border-line-strong',
                             background === value && 'ring-2 ring-accent ring-offset-2 ring-offset-raised',
                           )}
-                          style={{ background: READER_BACKGROUNDS[value] }}
-                        />
+                          style={value === 'AUTO' ? undefined : { background: READER_BACKGROUNDS[value] }}
+                        >
+                          {value === 'AUTO' && <CircleHalf aria-hidden weight="fill" className="size-full" />}
+                        </button>
                       ))}
                     </div>
                   </Row>

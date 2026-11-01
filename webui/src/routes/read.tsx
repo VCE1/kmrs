@@ -13,6 +13,7 @@ import { canDownload, isAdmin, useAuthStore } from '@/lib/store/auth'
 import { useThumbnailBust } from '@/lib/store/thumbnails'
 import {
   READER_BACKGROUNDS,
+  useReaderBackground,
   useReaderSettings,
   type ContinuousScaleType,
   type ScaleType,
@@ -98,7 +99,7 @@ function Reader({ bookId }: { bookId: string }) {
   const initialPageParam = Number(searchParams.get('page'))
 
   const settingsDirection = useReaderSettings((s) => s.readingDirection)
-  const background = useReaderSettings((s) => s.background)
+  const background = useReaderBackground()
   const pageLayout = useReaderSettings((s) => s.pageLayout)
   const splitWide = useReaderSettings((s) => s.splitWide)
   const user = useAuthStore((s) => s.user)
@@ -500,10 +501,12 @@ function Reader({ bookId }: { bookId: string }) {
           pages={pages}
           page={page}
           direction={direction}
+          book={book}
+          previousBook={siblingPrevious}
+          nextBook={siblingNext}
           onPageChange={goTo}
           onToggleChrome={toggleChrome}
-          onJumpPrevious={() => boundaryTurn('previous')}
-          onJumpNext={() => boundaryTurn('next')}
+          onLeaveBook={goBook}
           onMeasure={reportDims}
           splitHalf={splitHalf}
           onSplitHalfChange={setSplitHalf}

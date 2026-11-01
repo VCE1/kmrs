@@ -109,6 +109,7 @@
     "background": "Background",
     "backgroundLabel": "Background {{color}}",
     "backgrounds": {
+      "auto": "Follow theme",
       "black": "Black",
       "gray": "Gray",
       "white": "White"

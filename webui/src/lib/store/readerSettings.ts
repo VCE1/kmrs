@@ -1,12 +1,16 @@
+import { useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ReadingDirection } from '@/lib/api/types'
+import { useUiStore } from '@/lib/store/ui'
 import type { PagedReaderLayout } from '@/lib/utils/spreads'
 
 export type ScaleType = 'SCREEN' | 'WIDTH' | 'WIDTH_SHRINK_ONLY' | 'HEIGHT' | 'ORIGINAL'
 export type ContinuousScaleType = 'WIDTH' | 'ORIGINAL'
 export type PageTransition = 'AUTO' | 'SLIDE' | 'FADE'
-export type ReaderBackground = 'BLACK' | 'GRAY' | 'WHITE'
+export type ReaderBackground = 'BLACK' | 'GRAY' | 'WHITE' | 'AUTO'
+export type ResolvedReaderBackground = Exclude<ReaderBackground, 'AUTO'>
+export type TapZoneLayout = 'STANDARD' | 'REVERSED' | 'EDGE' | 'KINDLE' | 'OFF'
 export type EpubTheme = 'DAY' | 'SEPIA' | 'NIGHT'
 export type EpubFontFamily = 'Original' | `server:${string}` | `local:${string}`
 
@@ -15,6 +19,8 @@ interface ReaderSettings {
   pageLayout: PagedReaderLayout
   /** split wide pages into two half-page turns in single-page layout */
   splitWide: boolean
+  /** upscale pages smaller than the viewport in fit-screen mode */
+  stretchSmall: boolean
   continuousScale: ContinuousScaleType
   /** side padding percent, 0-40 step 5 */
   continuousPadding: number
@@ -22,6 +28,7 @@ interface ReaderSettings {
   continuousMargin: number
   readingDirection: ReadingDirection
   swipe: boolean
+  tapZones: TapZoneLayout
   animations: boolean
   /** paged reader turn style while animations are on; AUTO fades horizontal turns in landscape viewports */
   pageTransition: PageTransition
@@ -40,7 +47,7 @@ interface ReaderSettingsState extends ReaderSettings {
   update: (patch: Partial<ReaderSettings>) => void
 }
 
-export const READER_BACKGROUNDS: Record<ReaderBackground, string> = {
+export const READER_BACKGROUNDS: Record<ResolvedReaderBackground, string> = {
   BLACK: '#000000',
   GRAY: '#161618',
   WHITE: '#f5f4f0',
@@ -52,11 +59,13 @@ export const useReaderSettings = create<ReaderSettingsState>()(
       scale: 'SCREEN',
       pageLayout: 'SINGLE_PAGE',
       splitWide: false,
+      stretchSmall: false,
       continuousScale: 'WIDTH',
       continuousPadding: 0,
       continuousMargin: 0,
       readingDirection: 'LEFT_TO_RIGHT',
       swipe: true,
+      tapZones: 'STANDARD',
       animations: true,
       pageTransition: 'AUTO',
       alwaysFullscreen: false,
@@ -71,3 +80,20 @@ export const useReaderSettings = create<ReaderSettingsState>()(
     { name: 'kmweb.reader' },
   ),
 )
+
+const systemLight = window.matchMedia('(prefers-color-scheme: light)')
+
+/** The background to paint: AUTO resolves against the app theme and tracks it live. */
+export function useReaderBackground(): ResolvedReaderBackground {
+  const background = useReaderSettings((s) => s.background)
+  const theme = useUiStore((s) => s.theme)
+  const prefersLight = useSyncExternalStore(
+    (onChange) => {
+      systemLight.addEventListener('change', onChange)
+      return () => systemLight.removeEventListener('change', onChange)
+    },
+    () => systemLight.matches,
+  )
+  if (background !== 'AUTO') return background
+  return (theme === 'system' ? prefersLight : theme === 'light') ? 'WHITE' : 'BLACK'
+}
