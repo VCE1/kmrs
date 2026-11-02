@@ -125,6 +125,7 @@ export function EpubReader({ book }: { book: BookDto }) {
           setPosition(positionOf(locator, positions))
           scheduleProgress(locator)
         },
+        viewportChanged: () => {},
         timelineItemChanged: () => {},
         tap: () => false,
         click: () => false,
