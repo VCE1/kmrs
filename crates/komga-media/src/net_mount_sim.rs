@@ -164,7 +164,7 @@ fn analyze_old(path: &Path, stats: &Rc<RefCell<Stats>>) -> Vec<(String, Option<(
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let name = entry.name().unwrap().into_owned();
         let file_size = entry.size() as usize;
         let mut head = vec![0u8; 65536.min(file_size)];
         let n = read_full(&mut entry, &mut head);

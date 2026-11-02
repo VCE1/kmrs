@@ -209,7 +209,13 @@ pub(crate) fn by_name_decoded<'a, R: std::io::Read + std::io::Seek>(
 ) -> std::result::Result<zip::read::ZipFile<'a, R>, zip::result::ZipError> {
     let index = archive
         .index_for_name(entry_name)
-        .or_else(|| (0..archive.len()).find(|&i| archive.name_for_index(i) == Some(entry_name)))
+        .or_else(|| {
+            (0..archive.len()).find(|&i| {
+                archive
+                    .name_for_index(i)
+                    .is_some_and(|name| name.is_ok_and(|name| name == entry_name))
+            })
+        })
         .or_else(|| {
             (0..archive.len()).find(|&i| {
                 archive
@@ -423,7 +429,7 @@ mod tests {
         write_zip_raw(&path, &[(name_gbk, b"jpeg-bytes")]);
 
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
-        let decoded = archive.by_index(0).unwrap().name().to_string();
+        let decoded = archive.by_index(0).unwrap().name().unwrap().into_owned();
         assert_ne!(decoded.as_bytes(), name_gbk, "fixture must decode the name");
 
         assert_eq!(get_entry_bytes(&path, &decoded).unwrap(), b"jpeg-bytes");
@@ -452,8 +458,8 @@ mod tests {
         write_zip_raw(&path, &[("封面.jpg".as_bytes(), b"jpeg-bytes")]);
 
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
-        let decoded = archive.by_index(0).unwrap().name().to_string();
-        assert_ne!(decoded, "封面.jpg", "fixture must decode as CP437");
+        let decoded = archive.by_index(0).unwrap().name().unwrap().into_owned();
+        assert_eq!(decoded, "封面.jpg", "fixture must decode as UTF-8");
 
         assert_eq!(get_entry_bytes(&path, &decoded).unwrap(), b"jpeg-bytes");
         assert_eq!(get_entry_bytes(&path, "封面.jpg").unwrap(), b"jpeg-bytes");

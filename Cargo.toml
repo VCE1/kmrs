@@ -65,17 +65,17 @@ hayro-jpeg2000 = { version = "0.4", features = ["image"] }
 libheif-rs = { version = "3", default-features = false, features = ["v1_17"] }
 libheif-sys = { version = "5.3", features = ["prebuilt"] }
 moka = { version = "0.12", features = ["future", "sync"] }
-sysinfo = { version = "0.39", default-features = false, features = ["system", "disk"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system", "disk"] }
 jiff = "0.2"
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 roxmltree = "0.21"
-scraper = "0.27"
+scraper = "0.29"
 compress-tools = { version = "0.16", default-features = false, features = ["static"] }
 # `thread_safe` (default) stays on: pdfium-render 0.9 allows exactly one bindings object
 # per process and serializes every FFI call behind a mutex, so per-thread bindings are
 # impossible; the global PDF document cache in komga-media relies on it for Sync
 pdfium-render = "0.9"
-tantivy = "0.26.2"
+tantivy = "0.27.0"
 # opt-in heap profiling (komga-server `profiling` feature)
 tikv-jemallocator = { version = "0.6", features = ["profiling"] }
 tikv-jemalloc-ctl = { version = "0.6", features = ["profiling"] }

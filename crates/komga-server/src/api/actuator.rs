@@ -362,9 +362,11 @@ async fn get_health(State(state): State<AppState>, auth: MaybeAuth) -> Response 
 /// the disk with the longest mount-point prefix of the path.
 pub(crate) fn disk_space_bytes(path: &std::path::Path) -> (i64, i64) {
     let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    sysinfo::Disks::new_with_refreshed_list()
-        .list()
-        .iter()
+    let Ok(disks) = sysinfo::Disks::new_with_refreshed_list() else {
+        return (0, 0);
+    };
+    (&disks)
+        .into_iter()
         .filter(|d| path.starts_with(d.mount_point()))
         .max_by_key(|d| d.mount_point().as_os_str().len())
         .map(|d| (d.total_space() as i64, d.available_space() as i64))
@@ -490,7 +492,7 @@ fn os_name_version() -> (String, String) {
         other => other,
     }
     .to_string();
-    let version = sysinfo::System::kernel_version().unwrap_or_else(|| "unknown".to_string());
+    let version = sysinfo::System::kernel_version().unwrap_or_else(|_| "unknown".to_string());
     (name, version)
 }
 

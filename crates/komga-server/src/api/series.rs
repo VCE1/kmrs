@@ -2079,7 +2079,7 @@ mod tests {
         let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         assert_eq!(archive.len(), 2);
         let mut names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
         names.sort();
         assert_eq!(names, ["Berserk v01.cbz", "Berserk v02.cbz"]);

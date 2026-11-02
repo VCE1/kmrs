@@ -178,8 +178,9 @@ mod tests {
                 let (socket, _) = listener.accept().await.unwrap();
                 let body = body.to_string();
                 tokio::spawn(async move {
-                    use tokio::io::AsyncWriteExt;
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
                     let mut socket = socket;
+                    let _ = socket.read(&mut [0; 1024]).await;
                     let response = format!(
                         "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
                         body.len(),

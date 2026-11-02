@@ -759,7 +759,10 @@ pub(crate) fn zip_entries_from<R: std::io::Read + std::io::Seek>(
     let mut entries = Vec::new();
     for i in 0..archive.len() {
         // the central-directory name survives a broken local header, `entry.name_raw()` does not
-        let cd_name = archive.name_for_index(i).unwrap_or("?").to_string();
+        let cd_name = match archive.name_for_index(i) {
+            Some(Ok(name)) => name.into_owned(),
+            _ => "?".to_string(),
+        };
         let mut entry = match archive.by_index(i) {
             Ok(entry) => entry,
             Err(e) => {

@@ -1238,7 +1238,7 @@ mod tests {
         let mut archive = zip::ZipArchive::new(cursor).unwrap();
         assert_eq!(archive.len(), 2);
         let names: Vec<String> = (0..archive.len())
-            .map(|i| archive.by_index(i).unwrap().name().to_string())
+            .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
             .collect();
         assert_eq!(names, ["1 - Book One.cbz", "2 - Book Two.cbz"]);
         let mut entry = archive.by_name("1 - Book One.cbz").unwrap();

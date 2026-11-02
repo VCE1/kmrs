@@ -224,7 +224,7 @@ mod tests {
         let (name, method, crc, size, year) = {
             let first = archive.by_index(0).unwrap();
             (
-                first.name().to_string(),
+                first.name().unwrap().into_owned(),
                 first.compression(),
                 first.crc32(),
                 first.size(),

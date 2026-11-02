@@ -971,7 +971,7 @@ mod tests {
             let f = std::fs::File::open(&cbz).unwrap();
             let mut archive = zip::ZipArchive::new(f).unwrap();
             (0..archive.len())
-                .map(|i| archive.by_index(i).unwrap().name().to_string())
+                .map(|i| archive.by_index(i).unwrap().name().unwrap().into_owned())
                 .collect::<Vec<_>>()
         };
         assert_eq!(names, vec!["komga-1.png", "komga-2.png", "komga-3.png"]);

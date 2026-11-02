@@ -62,9 +62,10 @@ pub(crate) fn count_of(state: &AppState, table: &str) -> i64 {
 /// refreshes, so recreating the `System` would reset the baseline. Memory and CPU are
 /// refreshed with disjoint `ProcessRefreshKind`s, so one metric never disturbs the
 /// other's baseline.
-fn process_sys() -> &'static Mutex<sysinfo::System> {
-    static SYS: OnceLock<Mutex<sysinfo::System>> = OnceLock::new();
-    SYS.get_or_init(|| Mutex::new(sysinfo::System::new()))
+fn process_sys() -> Option<&'static Mutex<sysinfo::System>> {
+    static SYS: OnceLock<Option<Mutex<sysinfo::System>>> = OnceLock::new();
+    SYS.get_or_init(|| sysinfo::System::new().ok().map(Mutex::new))
+        .as_ref()
 }
 
 fn self_pid() -> sysinfo::Pid {
@@ -85,7 +86,10 @@ pub(crate) fn cpu_usage_percent() -> f64 {
         }
     }
     let pid = self_pid();
-    let mut sys = process_sys().lock().unwrap();
+    let Some(sys) = process_sys() else {
+        return 0.0;
+    };
+    let mut sys = sys.lock().unwrap();
     sys.refresh_processes_specifics(
         sysinfo::ProcessesToUpdate::Some(&[pid]),
         false,
@@ -104,7 +108,10 @@ pub(crate) fn cpu_usage_percent() -> f64 {
 
 pub(crate) fn rss_bytes() -> i64 {
     let pid = self_pid();
-    let mut sys = process_sys().lock().unwrap();
+    let Some(sys) = process_sys() else {
+        return 0;
+    };
+    let mut sys = sys.lock().unwrap();
     sys.refresh_processes_specifics(
         sysinfo::ProcessesToUpdate::Some(&[pid]),
         false,
