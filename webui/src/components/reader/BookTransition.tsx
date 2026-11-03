@@ -14,7 +14,17 @@ interface BookTransitionProps {
   onLeave: () => void
 }
 
-function BookSection({ badge, book, muted }: { badge: string; book: BookDto; muted: string }) {
+function BookSection({
+  badge,
+  book,
+  muted,
+  hidePortraitCover = false,
+}: {
+  badge: string
+  book: BookDto
+  muted: string
+  hidePortraitCover?: boolean
+}) {
   return (
     <div className="flex w-full max-w-64 min-w-0 flex-col items-center gap-3">
       <p className={cn('text-[11px] font-semibold tracking-wider uppercase', muted)}>{badge}</p>
@@ -22,7 +32,10 @@ function BookSection({ badge, book, muted }: { badge: string; book: BookDto; mut
         src={urls.bookThumbnail(book.id)}
         alt=""
         draggable={false}
-        className="h-[min(26dvh,14rem)] max-w-full rounded-lg object-contain shadow-pop landscape:h-[min(40dvh,18rem)]"
+        className={cn(
+          'h-[min(26dvh,14rem)] max-w-full rounded-lg object-contain shadow-pop landscape:h-[min(40dvh,18rem)]',
+          hidePortraitCover && 'hidden landscape:block',
+        )}
       />
       <div className="w-full space-y-0.5">
         <p className="line-clamp-2 text-[15px] font-semibold">{book.metadata.title || book.name}</p>
@@ -47,6 +60,7 @@ export function BookTransition({ direction, book, target, flip, onLeave }: BookT
       badge={t(next ? 'transition.finished' : 'transition.atStart')}
       book={book}
       muted={muted}
+      hidePortraitCover
     />
   )
   const other = target ? (
