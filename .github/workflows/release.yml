@@ -117,8 +117,31 @@ jobs:
           SCCACHE_GHA_ENABLED: "true"
           CARGO_INCREMENTAL: "0"
           CARGO_PROFILE_RELEASE_STRIP: ${{ matrix.heapprof && 'debuginfo' || 'symbols' }}
+      - name: Install macOS packaging tools
+        if: matrix.os == 'macos-latest'
+        run: brew install librsvg
+      - name: Package KMServer.app (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_KEY APPLE_API_KEY_ID APPLE_API_ISSUER; do
+            if [ -z "${!name}" ]; then
+              printf 'Missing release secret: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+          packaging/macos/package.sh \
+            "target/${{ matrix.target }}/release/kmrs" \
+            "${{ needs.version.outputs.version }}" \
+            dist \
+            aarch64
       - name: Package (unix)
-        if: runner.os != 'Windows'
+        if: matrix.os != 'windows-latest' && matrix.os != 'macos-latest'
         shell: bash
         run: |
           stage="kmrs_${{ needs.version.outputs.version }}_${{ matrix.target }}"

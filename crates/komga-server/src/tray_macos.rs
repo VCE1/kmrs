@@ -59,7 +59,7 @@ where
     let process = NSProcessInfo::processInfo();
     let activity = process.beginActivityWithOptions_reason(
         NSActivityOptions::UserInitiatedAllowingIdleSystemSleep,
-        ns_string!("KMReader server"),
+        ns_string!("KMServer"),
     );
 
     APP_RUNNING.store(true, Ordering::SeqCst);
@@ -179,10 +179,10 @@ fn build(
     paths: TrayPaths,
     shutdown: tokio::sync::watch::Sender<bool>,
 ) -> Result<TrayIcon, String> {
-    let open_item = MenuItem::with_id("open", "Open KMReader", true, None);
+    let open_item = MenuItem::with_id("open", "Open KMServer", true, None);
     let config_item = MenuItem::with_id("config", "Open configuration directory", true, None);
     let logs_item = MenuItem::with_id("logs", "Open logs folder", true, None);
-    let quit_item = MenuItem::with_id("quit", "Quit KMReader", true, None);
+    let quit_item = MenuItem::with_id("quit", "Quit KMServer", true, None);
     let menu = Menu::new();
     let _ = menu.append(&open_item);
     let _ = menu.append(&config_item);
@@ -198,7 +198,7 @@ fn build(
     let icon = load_icon().map_err(|e| format!("menu bar icon decode: {e}"))?;
     let item = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
-        .with_tooltip("KMReader")
+        .with_tooltip("KMServer")
         .with_icon_templated(icon)
         .build()
         .map_err(|e| e.to_string())?;
