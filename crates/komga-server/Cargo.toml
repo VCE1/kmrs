@@ -99,6 +99,7 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
     "NSGraphicsContext",
     "NSResponder",
     "NSRunningApplication",
+    "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
@@ -109,6 +110,12 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSString",
 ] }
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
+objc2-service-management = { version = "0.3", default-features = false, features = [
+    "std",
+    "SMAppService",
+    "objc2",
+    "objc2-foundation",
+] }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }

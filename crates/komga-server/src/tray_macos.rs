@@ -13,9 +13,10 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSEvent, NSEventModifierFlags, NSEventType,
 };
-use objc2_foundation::{ns_string, NSActivityOptions, NSPoint, NSProcessInfo};
-use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+use objc2_foundation::{ns_string, NSActivityOptions, NSBundle, NSPoint, NSProcessInfo, NSURL};
+use objc2_service_management::{SMAppService, SMAppServiceStatus};
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
 
 const MENU_BAR_ICON_PNG: &[u8] = include_bytes!("../resources/windows/tray-icon.png");
 
@@ -26,6 +27,10 @@ static APP_RUNNING: AtomicBool = AtomicBool::new(false);
 thread_local! {
     // TrayIcon is main-thread only; it lives here between start() and stop()
     static STATUS_ITEM: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
+    // the menu event handler must be Send+Sync, so the check item (Rc-based)
+    // cannot move into it; muda dispatches menu events on the main thread, where
+    // the item is reachable again
+    static AUTOSTART_ITEM: RefCell<Option<CheckMenuItem>> = const { RefCell::new(None) };
 }
 
 pub struct Tray;
@@ -182,6 +187,15 @@ fn build(
     let open_item = MenuItem::with_id("open", "Open KMServer", true, None);
     let config_item = MenuItem::with_id("config", "Open configuration directory", true, None);
     let logs_item = MenuItem::with_id("logs", "Open logs folder", true, None);
+    let autostart_item = app_bundle_path().map(|_| {
+        CheckMenuItem::with_id(
+            "autostart",
+            "Open at Login",
+            true,
+            autostart_enabled(),
+            None,
+        )
+    });
     let quit_item = MenuItem::with_id("quit", "Quit KMServer", true, None);
     let menu = Menu::new();
     let _ = menu.append(&open_item);
@@ -191,6 +205,10 @@ fn build(
     let logs_dir = paths.logs_dir.is_dir().then_some(paths.logs_dir);
     if logs_dir.is_some() {
         let _ = menu.append(&logs_item);
+    }
+    if let Some(item) = &autostart_item {
+        let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = menu.append(item);
     }
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&quit_item);
@@ -203,7 +221,15 @@ fn build(
         .build()
         .map_err(|e| e.to_string())?;
 
+    if let Some(item) = autostart_item {
+        AUTOSTART_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
+    }
     let config_dir = paths.config_dir;
+    TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
+        if matches!(event, TrayIconEvent::Click { .. }) {
+            refresh_autostart_item();
+        }
+    }));
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
         "open" => open_in_browser(port),
         "config" => open(config_dir.as_os_str()),
@@ -211,6 +237,28 @@ fn build(
             if let Some(dir) = &logs_dir {
                 open(dir.as_os_str());
             }
+        }
+        "autostart" => {
+            let service = unsafe { SMAppService::mainAppService() };
+            match unsafe { service.status() } {
+                status if status == SMAppServiceStatus::RequiresApproval => {
+                    open_login_settings();
+                }
+                status => {
+                    let enable = status != SMAppServiceStatus::Enabled;
+                    let result = unsafe {
+                        if enable {
+                            service.registerAndReturnError()
+                        } else {
+                            service.unregisterAndReturnError()
+                        }
+                    };
+                    if let Err(e) = result {
+                        tracing::warn!("login item unchanged: {e}");
+                    }
+                }
+            }
+            refresh_autostart_item();
         }
         "quit" => {
             let _ = shutdown.send(true);
@@ -242,4 +290,31 @@ fn open(target: &std::ffi::OsStr) {
             Err(e) => tracing::warn!("open {} failed: {e}", target.display()),
         }
     });
+}
+
+/// Only the packaged app can be registered as a login item. A terminal binary
+/// keeps the menu focused on the running server.
+fn app_bundle_path() -> Option<PathBuf> {
+    let path = NSBundle::mainBundle().bundleURL().path()?.to_string();
+    path.ends_with(".app").then_some(PathBuf::from(path))
+}
+
+fn autostart_enabled() -> bool {
+    (unsafe { SMAppService::mainAppService().status() }) == SMAppServiceStatus::Enabled
+}
+
+fn refresh_autostart_item() {
+    AUTOSTART_ITEM.with(|slot| {
+        if let Some(item) = slot.borrow().as_ref() {
+            item.set_checked(autostart_enabled());
+        }
+    });
+}
+
+fn open_login_settings() {
+    let url = NSURL::URLWithString(ns_string!(
+        "x-apple.systempreferences:com.apple.LoginItems-Settings.extension"
+    ))
+    .unwrap();
+    objc2_app_kit::NSWorkspace::sharedWorkspace().openURL(&url);
 }

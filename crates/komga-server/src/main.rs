@@ -103,7 +103,7 @@ async fn run() -> anyhow::Result<()> {
 
     // opening the main database creates the file, so its absence beforehand marks
     // the very first start
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let first_run = !config.database.file.exists();
     let db = Database::open(&config.database).context("open main database")?;
     // Dedicated pools over the same file for background task execution; task
@@ -258,7 +258,7 @@ async fn run() -> anyhow::Result<()> {
     );
     // the initial admin claim happens in the web UI; only in an interactive
     // session (tray present) is there a desktop to show it on
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     if first_run && tray.is_some() {
         tray::open_in_browser(state.config.port);
     }
