@@ -71,7 +71,7 @@ export function KeepReadingCard({ book, className }: { book: BookDto; className?
       <div aria-hidden className="pointer-events-none absolute inset-0 rounded-[inherit] inset-ring-1 inset-ring-line" />
 
       {/* cover + text form a single navigation target; the trailing menu stays a separate one */}
-      <Link to={to} aria-label={t('card.continueReading', { title })} className="flex min-w-0 flex-1 items-center gap-3 self-stretch outline-none" {...longPress}>
+      <Link to={to} aria-label={t('card.continueReading', { title })} className="flex min-w-0 flex-1 items-center gap-3 self-stretch outline-none [-webkit-touch-callout:none] select-none" {...longPress}>
         <div className="cover-aspect relative w-[45px] shrink-0 overflow-hidden rounded-md shadow-[0_2px_10px_rgb(0_0_0/0.5)] ring-1 ring-line">
           {xf.base && <img src={xf.base} alt="" aria-hidden draggable={false} className="absolute inset-0 size-full object-cover" />}
           <img

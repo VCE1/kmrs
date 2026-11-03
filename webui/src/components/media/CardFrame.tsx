@@ -26,6 +26,7 @@ export function CardFrame({ to, children, className, label, actions, onLongPress
       {...(onLongPress ? longPress : {})}
       className={cn(
         'group block cursor-pointer rounded-lg outline-none transition-transform duration-200 ease-out',
+        onLongPress && '[-webkit-touch-callout:none] select-none',
         'active:scale-[0.98]',
         actions ? undefined : cn('animate-card-in', className),
       )}
