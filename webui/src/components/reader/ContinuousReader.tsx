@@ -68,20 +68,36 @@ export function ContinuousReader({
   useEffect(() => {
     const root = scrollRef.current
     if (!root) return
-    const observer = new IntersectionObserver(
+    // current-page tracking stays at the viewport center, but images need a head start
+    // before short pages scroll into view, especially with a mouse wheel
+    const loader = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          markSeen(Number((entry.target as HTMLElement).dataset.page) - 1)
+        }
+      },
+      { root, rootMargin: '100% 0px 200% 0px' },
+    )
+    const current = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue
           const n = Number((entry.target as HTMLElement).dataset.page)
           currentRef.current = n
-          markSeen(n - 1)
           onPageChangeRef.current(n)
         }
       },
       { root, rootMargin: '-45% 0px -45% 0px' },
     )
-    root.querySelectorAll('[data-page]').forEach((el) => observer.observe(el))
-    return () => observer.disconnect()
+    root.querySelectorAll('[data-page]').forEach((el) => {
+      loader.observe(el)
+      current.observe(el)
+    })
+    return () => {
+      loader.disconnect()
+      current.disconnect()
+    }
   }, [pages, markSeen])
 
   // initial position + boundary snapshot, once placeholders have laid out
