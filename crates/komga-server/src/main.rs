@@ -24,6 +24,9 @@ mod state;
 mod thumbnails;
 #[cfg(target_os = "windows")]
 mod tray;
+#[cfg(target_os = "macos")]
+#[path = "tray_macos.rs"]
+mod tray;
 mod webhook;
 #[allow(dead_code)]
 mod webpub;
@@ -54,6 +57,7 @@ fn cap_glibc_arenas() {
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 fn cap_glibc_arenas() {}
 
+#[cfg(not(target_os = "macos"))]
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let result = run().await;
@@ -62,6 +66,16 @@ async fn main() -> anyhow::Result<()> {
         tray::show_startup_error(e);
     }
     result
+}
+
+// AppKit owns the main thread in a GUI session (src/tray_macos.rs), so the runtime
+// is driven from whichever thread run_app hands the server to
+#[cfg(target_os = "macos")]
+fn main() -> anyhow::Result<()> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    tray::run_app(move || runtime.block_on(run()))
 }
 
 async fn run() -> anyhow::Result<()> {
@@ -233,7 +247,7 @@ async fn run() -> anyhow::Result<()> {
     {
         tray::detach_console();
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     let tray = tray::start(
         state.config.port,
         tray::TrayPaths {
@@ -256,7 +270,7 @@ async fn run() -> anyhow::Result<()> {
     .await;
     // the tray stands for a serving server: it goes as soon as serving ends, on
     // the error path too, not after the task drain below
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     if let Some(tray) = tray {
         tray.stop();
     }
