@@ -117,6 +117,9 @@ objc2-service-management = { version = "0.3", default-features = false, features
     "objc2-foundation",
 ] }
 
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+tempfile = "3"
+
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
 tempfile = "3"

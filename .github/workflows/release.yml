@@ -140,6 +140,7 @@ jobs:
             "${{ needs.version.outputs.version }}" \
             dist \
             aarch64
+          ditto -c -k --keepParent dist/KMServer.app dist/KMServer.zip
       - name: Package (unix)
         if: matrix.os != 'windows-latest' && matrix.os != 'macos-latest'
         shell: bash
@@ -155,11 +156,44 @@ jobs:
         shell: pwsh
         run: |
           $stage = "kmrs_${{ needs.version.outputs.version }}_${{ matrix.target }}"
-          New-Item -ItemType Directory -Force -Path $stage, dist | Out-Null
+          New-Item -ItemType Directory -Force -Path $stage, dist, pdfium | Out-Null
+          curl.exe -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8125/pdfium-win-x64.tgz" -o pdfium.tgz
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar.exe -xzf pdfium.tgz -C pdfium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item "target\${{ matrix.target }}\release\kmrs.exe" $stage
+          Copy-Item pdfium\bin\pdfium.dll $stage
           Copy-Item LICENSE, NOTICE, README.md $stage
           Copy-Item -Recurse licenses $stage
+          Copy-Item pdfium\LICENSE "$stage\licenses\PDFium-LICENSE"
+          Copy-Item -Recurse pdfium\licenses "$stage\licenses\PDFium"
           Compress-Archive -Path $stage -DestinationPath "dist\${stage}.zip"
+          Copy-Item "target\${{ matrix.target }}\release\kmrs.exe" packaging/windows/kmrs.exe
+          Copy-Item pdfium\bin\pdfium.dll packaging/windows/pdfium.dll
+          New-Item -ItemType Directory -Path packaging/windows/PDFium | Out-Null
+          Copy-Item pdfium\LICENSE packaging/windows/PDFium/
+          Copy-Item -Recurse pdfium\licenses packaging/windows/PDFium/
+          Copy-Item crates/komga-server/resources/windows/kmrs.ico packaging/windows/kmrs.ico
+          choco install nsis --no-progress -y
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) { throw "makensis not found at $makensis" }
+          & $makensis /DVERSION=${{ needs.version.outputs.version }} /DOUTFILE="$PWD\dist\KMServer_x64-setup.exe" packaging\windows\installer.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item packaging\windows\kmrs.exe, packaging\windows\kmrs.ico, packaging\windows\pdfium.dll
+          Remove-Item -Recurse packaging\windows\PDFium, pdfium
+          Remove-Item pdfium.tgz
+      - name: Write update checksums
+        if: matrix.os == 'macos-latest' || matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = macos-latest ]; then
+            assets=(KMServer.zip)
+          else
+            assets=(KMServer_x64-setup.exe)
+          fi
+          for asset in "${assets[@]}"; do
+            sha256sum "dist/$asset"
+          done > dist/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
           name: kmrs-${{ matrix.target }}

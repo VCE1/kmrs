@@ -9,6 +9,8 @@
 mod api;
 mod auth;
 mod config;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod desktop;
 mod dto;
 mod error;
 mod events;
@@ -255,6 +257,7 @@ async fn run() -> anyhow::Result<()> {
             logs_dir,
         },
         state.shutdown_tx.clone(),
+        desktop::update_handle(),
     );
     // the initial admin claim happens in the web UI; only in an interactive
     // session (tray present) is there a desktop to show it on

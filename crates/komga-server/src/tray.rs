@@ -9,7 +9,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use windows_sys::Win32::Foundation::ERROR_SUCCESS;
 #[cfg(not(debug_assertions))]
 use windows_sys::Win32::System::Console::FreeConsole;
@@ -38,6 +38,8 @@ thread_local! {
     // cannot move into it; muda dispatches menu events synchronously on this
     // thread, where the item is reachable again
     static AUTOSTART_ITEM: RefCell<Option<CheckMenuItem>> = const { RefCell::new(None) };
+    static UPDATE_ITEM: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
+    static TRAY_ICON: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
 }
 
 pub struct Tray {
@@ -102,6 +104,7 @@ pub fn start(
     port: u16,
     paths: TrayPaths,
     shutdown: tokio::sync::watch::Sender<bool>,
+    update: crate::service::desktop_update::DesktopUpdate,
 ) -> Option<Tray> {
     let interactive = unsafe {
         let desktop = OpenInputDesktop(0, 0, DESKTOP_READOBJECTS);
@@ -118,7 +121,7 @@ pub fn start(
     let (ready_tx, ready_rx) = mpsc::channel();
     let handle = std::thread::Builder::new()
         .name("tray".into())
-        .spawn(move || run(port, paths, shutdown, ready_tx))
+        .spawn(move || run(port, paths, shutdown, update, ready_tx))
         .ok()?;
     match ready_rx.recv_timeout(Duration::from_secs(10)) {
         Ok(Ok(thread_id)) => Some(Tray { thread_id, handle }),
@@ -149,6 +152,7 @@ fn run(
     port: u16,
     paths: TrayPaths,
     shutdown: tokio::sync::watch::Sender<bool>,
+    update: crate::service::desktop_update::DesktopUpdate,
     ready: mpsc::Sender<Result<u32, String>>,
 ) {
     let open_item = MenuItem::with_id("open", "Open KMReader", true, None);
@@ -163,6 +167,15 @@ fn run(
         None,
     );
     let exit_item = MenuItem::with_id("exit", "Exit", true, None);
+    let installed_exe = crate::desktop::installed_exe();
+    let update_item = installed_exe.as_ref().map(|_| {
+        MenuItem::with_id(
+            "update",
+            crate::desktop::status_label(&update.status()),
+            true,
+            None,
+        )
+    });
     let menu = Menu::new();
     let _ = menu.append(&open_item);
     let config_target = wide_os(paths.config_dir.as_os_str());
@@ -177,10 +190,15 @@ fn run(
         let _ = menu.append(&logs_item);
     }
     let _ = menu.append(&autostart_item);
+    if let Some(item) = &update_item {
+        let _ = menu.append(item);
+    }
     let _ = menu.append(&PredefinedMenuItem::separator());
     let _ = menu.append(&exit_item);
     AUTOSTART_ITEM.with(|slot| *slot.borrow_mut() = Some(autostart_item));
-
+    if let Some(item) = update_item {
+        UPDATE_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
+    }
     let tray = (|| {
         let icon = load_icon().map_err(|e| format!("tray icon decode: {e}"))?;
         TrayIconBuilder::new()
@@ -201,6 +219,9 @@ fn run(
         }
     };
 
+    TRAY_ICON.with(|slot| *slot.borrow_mut() = Some(tray.clone()));
+
+    let refresh_update = update.clone();
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
         "open" => open_in_browser(port),
         "logs" => {
@@ -225,9 +246,26 @@ fn run(
         "exit" => {
             let _ = shutdown.send(true);
         }
+        "update" => {
+            if !crate::desktop::busy(&update.status()) {
+                let update = update.clone();
+                let shutdown = shutdown.clone();
+                let app = installed_exe.clone().unwrap();
+                std::thread::spawn(move || match update.status() {
+                    crate::service::desktop_update::Status::Available(_) => {
+                        crate::desktop::start_update(update, app, shutdown)
+                    }
+                    _ => {
+                        let _ = update.start_check();
+                    }
+                });
+            }
+            refresh_update_item(&update);
+        }
         _ => {}
     }));
     TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+        refresh_update_item(&refresh_update);
         if let TrayIconEvent::Click {
             button: MouseButton::Left,
             button_state: MouseButtonState::Up,
@@ -291,6 +329,21 @@ fn shell_open(target: &[u16]) {
             tracing::warn!("ShellExecute open failed (code {})", result as isize);
         }
     }
+}
+
+fn refresh_update_item(update: &crate::service::desktop_update::DesktopUpdate) {
+    UPDATE_ITEM.with(|slot| {
+        if let Some(item) = slot.borrow().as_ref() {
+            let status = update.status();
+            item.set_text(crate::desktop::status_label(&status));
+            item.set_enabled(!crate::desktop::busy(&status));
+            TRAY_ICON.with(|slot| {
+                if let Some(icon) = slot.borrow().as_ref() {
+                    let _ = icon.set_tooltip(Some(crate::desktop::tooltip(&status)));
+                }
+            });
+        }
+    });
 }
 
 fn autostart_enabled() -> bool {

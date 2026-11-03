@@ -13,7 +13,7 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSEvent, NSEventModifierFlags, NSEventType,
 };
-use objc2_foundation::{ns_string, NSActivityOptions, NSBundle, NSPoint, NSProcessInfo, NSURL};
+use objc2_foundation::{ns_string, NSActivityOptions, NSPoint, NSProcessInfo, NSURL};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -31,6 +31,8 @@ thread_local! {
     // cannot move into it; muda dispatches menu events on the main thread, where
     // the item is reachable again
     static AUTOSTART_ITEM: RefCell<Option<CheckMenuItem>> = const { RefCell::new(None) };
+    static UPDATE_ITEM: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
+    static TRAY_ICON: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
 }
 
 pub struct Tray;
@@ -143,13 +145,14 @@ pub fn start(
     port: u16,
     paths: TrayPaths,
     shutdown: tokio::sync::watch::Sender<bool>,
+    update: crate::service::desktop_update::DesktopUpdate,
 ) -> Option<Tray> {
     if !APP_RUNNING.load(Ordering::SeqCst) {
         return None;
     }
     let (ready_tx, ready_rx) = mpsc::channel();
     DispatchQueue::main().exec_async(move || {
-        let result = build(port, paths, shutdown).map(|item| {
+        let result = build(port, paths, shutdown, update).map(|item| {
             STATUS_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
         });
         let _ = ready_tx.send(result);
@@ -172,6 +175,7 @@ impl Tray {
     pub fn stop(self) {
         let (done_tx, done_rx) = mpsc::channel();
         DispatchQueue::main().exec_async(move || {
+            TRAY_ICON.with(|slot| slot.borrow_mut().take());
             STATUS_ITEM.with(|slot| slot.borrow_mut().take());
             let _ = done_tx.send(());
         });
@@ -183,11 +187,12 @@ fn build(
     port: u16,
     paths: TrayPaths,
     shutdown: tokio::sync::watch::Sender<bool>,
+    update: crate::service::desktop_update::DesktopUpdate,
 ) -> Result<TrayIcon, String> {
     let open_item = MenuItem::with_id("open", "Open KMServer", true, None);
     let config_item = MenuItem::with_id("config", "Open configuration directory", true, None);
     let logs_item = MenuItem::with_id("logs", "Open logs folder", true, None);
-    let autostart_item = app_bundle_path().map(|_| {
+    let autostart_item = crate::desktop::app_bundle_path().map(|_| {
         CheckMenuItem::with_id(
             "autostart",
             "Open at Login",
@@ -197,6 +202,14 @@ fn build(
         )
     });
     let quit_item = MenuItem::with_id("quit", "Quit KMServer", true, None);
+    let update_item = crate::desktop::app_bundle_path().map(|_| {
+        MenuItem::with_id(
+            "update",
+            crate::desktop::status_label(&update.status()),
+            true,
+            None,
+        )
+    });
     let menu = Menu::new();
     let _ = menu.append(&open_item);
     let _ = menu.append(&config_item);
@@ -208,6 +221,9 @@ fn build(
     }
     if let Some(item) = &autostart_item {
         let _ = menu.append(&PredefinedMenuItem::separator());
+        let _ = menu.append(item);
+    }
+    if let Some(item) = &update_item {
         let _ = menu.append(item);
     }
     let _ = menu.append(&PredefinedMenuItem::separator());
@@ -224,10 +240,16 @@ fn build(
     if let Some(item) = autostart_item {
         AUTOSTART_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
     }
+    if let Some(item) = update_item {
+        UPDATE_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
+    }
+    TRAY_ICON.with(|slot| *slot.borrow_mut() = Some(item.clone()));
     let config_dir = paths.config_dir;
-    TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
+    let refresh_update = update.clone();
+    TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
         if matches!(event, TrayIconEvent::Click { .. }) {
             refresh_autostart_item();
+            refresh_update_item(&refresh_update);
         }
     }));
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
@@ -263,6 +285,23 @@ fn build(
         "quit" => {
             let _ = shutdown.send(true);
         }
+        "update" => {
+            if !crate::desktop::busy(&update.status()) {
+                let update = update.clone();
+                let shutdown = shutdown.clone();
+                let app = crate::desktop::app_bundle_path().unwrap();
+                let config_dir = config_dir.clone();
+                std::thread::spawn(move || match update.status() {
+                    crate::service::desktop_update::Status::Available(_) => {
+                        crate::desktop::start_update(update, app, config_dir, port, shutdown)
+                    }
+                    _ => {
+                        let _ = update.start_check();
+                    }
+                });
+            }
+            refresh_update_item(&update);
+        }
         _ => {}
     }));
     Ok(item)
@@ -292,13 +331,6 @@ fn open(target: &std::ffi::OsStr) {
     });
 }
 
-/// Only the packaged app can be registered as a login item. A terminal binary
-/// keeps the menu focused on the running server.
-fn app_bundle_path() -> Option<PathBuf> {
-    let path = NSBundle::mainBundle().bundleURL().path()?.to_string();
-    path.ends_with(".app").then_some(PathBuf::from(path))
-}
-
 fn autostart_enabled() -> bool {
     (unsafe { SMAppService::mainAppService().status() }) == SMAppServiceStatus::Enabled
 }
@@ -307,6 +339,21 @@ fn refresh_autostart_item() {
     AUTOSTART_ITEM.with(|slot| {
         if let Some(item) = slot.borrow().as_ref() {
             item.set_checked(autostart_enabled());
+        }
+    });
+}
+
+fn refresh_update_item(update: &crate::service::desktop_update::DesktopUpdate) {
+    UPDATE_ITEM.with(|slot| {
+        if let Some(item) = slot.borrow().as_ref() {
+            let status = update.status();
+            item.set_text(crate::desktop::status_label(&status));
+            item.set_enabled(!crate::desktop::busy(&status));
+            TRAY_ICON.with(|slot| {
+                if let Some(icon) = slot.borrow().as_ref() {
+                    let _ = icon.set_tooltip(Some(crate::desktop::tooltip(&status)));
+                }
+            });
         }
     });
 }

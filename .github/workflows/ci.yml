@@ -94,6 +94,28 @@ jobs:
           cache-targets: "false"
       - uses: mozilla-actions/sccache-action@v0.0.11
       - run: cargo build --workspace --all-targets
+      - name: Build Windows installer
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Copy-Item target\debug\kmrs.exe packaging\windows\kmrs.exe
+          Copy-Item crates\komga-server\resources\windows\kmrs.ico packaging\windows\kmrs.ico
+          New-Item -ItemType Directory -Path pdfium, packaging\windows\PDFium | Out-Null
+          curl.exe -fsSL "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/8125/pdfium-win-x64.tgz" -o pdfium.tgz
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar.exe -xzf pdfium.tgz -C pdfium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item pdfium\bin\pdfium.dll packaging\windows\pdfium.dll
+          Copy-Item pdfium\LICENSE packaging\windows\PDFium\
+          Copy-Item -Recurse pdfium\licenses packaging\windows\PDFium\
+          choco install nsis --no-progress -y
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Test-Path $makensis)) { throw "makensis not found at $makensis" }
+          & $makensis /DVERSION=0.0.0 /DOUTFILE="$PWD\KMServer-setup.exe" packaging\windows\installer.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Remove-Item packaging\windows\kmrs.exe, packaging\windows\kmrs.ico, packaging\windows\pdfium.dll
+          Remove-Item -Recurse packaging\windows\PDFium, pdfium
+          Remove-Item pdfium.tgz
 
   web:
     needs: changes

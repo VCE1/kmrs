@@ -4,6 +4,8 @@
 pub mod book;
 pub mod collection;
 pub mod convert;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub mod desktop_update;
 pub mod import;
 pub mod kepub;
 pub mod kobo_proxy;
