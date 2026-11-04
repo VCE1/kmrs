@@ -3,6 +3,7 @@
 //! the server runs on a background thread instead.
 
 use std::cell::RefCell;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -11,9 +12,10 @@ use std::time::Duration;
 use dispatch2::DispatchQueue;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSEvent, NSEventModifierFlags, NSEventType,
+    NSAlert, NSAlertSecondButtonReturn, NSAlertStyle, NSApplication, NSApplicationActivationPolicy,
+    NSEvent, NSEventModifierFlags, NSEventType,
 };
-use objc2_foundation::{ns_string, NSActivityOptions, NSPoint, NSProcessInfo, NSURL};
+use objc2_foundation::{ns_string, NSActivityOptions, NSPoint, NSProcessInfo, NSString, NSURL};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -136,6 +138,58 @@ impl Drop for StopAppOnDrop {
             }
         });
     }
+}
+
+/// Last-resort error surface for a fatal startup error of KMServer.app opened
+/// from Finder, at login or by the updater: with no terminal attached the app
+/// would otherwise quit without a word. Terminal launches already see the error
+/// printed, and a bare binary or a session without graphic access has nowhere to
+/// show an alert.
+pub fn show_startup_error(error: &anyhow::Error) {
+    if crate::desktop::app_bundle_path().is_none()
+        || std::io::stderr().is_terminal()
+        || !session_has_graphic_access()
+    {
+        return;
+    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    // a menu bar app is never frontmost by itself, so the alert would open behind
+    // other windows; activate() needs macOS 14 and the app supports macOS 13
+    #[allow(deprecated)]
+    NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+
+    let alert = NSAlert::new(mtm);
+    alert.setAlertStyle(NSAlertStyle::Warning);
+    alert.setMessageText(ns_string!("KMServer couldn't start"));
+    alert.setInformativeText(&NSString::from_str(&format!(
+        "{error:#}\n\nThe log files have more details."
+    )));
+    // the first button is the default; Quit describes what happens either way
+    alert.addButtonWithTitle(ns_string!("Quit"));
+    let logs_dir = startup_logs_dir();
+    if logs_dir.is_some() {
+        alert.addButtonWithTitle(ns_string!("Show Logs"));
+    }
+    if alert.runModal() == NSAlertSecondButtonReturn {
+        if let Some(dir) = logs_dir {
+            // waited on: the process exits right after, which would end a
+            // background `open` before it ran
+            let _ = std::process::Command::new("/usr/bin/open")
+                .arg(dir)
+                .status();
+        }
+    }
+}
+
+/// The logs folder of the data directory the failed start used, when file
+/// logging got as far as creating it.
+fn startup_logs_dir() -> Option<PathBuf> {
+    use clap::Parser;
+    let cli = crate::config::Cli::try_parse().ok()?;
+    let dir = crate::config::config_dir(&cli).join("logs");
+    dir.is_dir().then_some(dir)
 }
 
 /// Opens the web UI in the default browser.

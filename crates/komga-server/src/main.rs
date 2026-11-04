@@ -77,7 +77,11 @@ fn main() -> anyhow::Result<()> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    tray::run_app(move || runtime.block_on(run()))
+    let result = tray::run_app(move || runtime.block_on(run()));
+    if let Err(e) = &result {
+        tray::show_startup_error(e);
+    }
+    result
 }
 
 async fn run() -> anyhow::Result<()> {
