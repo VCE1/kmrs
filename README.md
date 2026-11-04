@@ -32,13 +32,13 @@ docker run -d \
   ghcr.io/kmworks/kmrs
 ```
 
-The kmweb React web UI (built from [`webui/`](webui/) in this repo) is embedded in the binary and served at `/` out of the box — nothing to configure. Prebuilt binaries (Linux, macOS, Windows; x86_64 and aarch64) are on the [releases page](https://github.com/kmworks/kmrs/releases/latest); API-only clients like [KMReader](https://github.com/kmworks/kmreader), KOReader, or Kobo work too.
+The kmweb React web UI (built from [`webui/`](webui/) in this repo) is embedded in the binary and served at `/` out of the box — nothing to configure. [Releases](https://github.com/kmworks/kmrs/releases/latest) provide a signed KMServer app for Apple silicon, a per-user Windows installer, and prebuilt binaries for Linux and Windows; API-only clients like [KMReader](https://github.com/kmworks/kmreader), KOReader, or Kobo work too.
 
 ## Documentation
 
 Full documentation lives at **[kmworks.date/server](https://kmworks.date/server/)**:
 
-- [Installation](https://kmworks.date/server/installation) — Docker, prebuilt binaries, build from source
+- [Installation](https://kmworks.date/server/installation) — Docker, KMServer desktop apps, prebuilt binaries, build from source
 - [Supported formats](https://kmworks.date/server/intro#supported-formats) — CBZ/ZIP, CBR/RAR, PDF, EPUB, and Webtoon reading
 - [Configuration](https://kmworks.date/server/configuration) — `config.toml` key reference, env vars, precedence
 - [Serving a web UI](https://kmworks.date/server/webui) — bundled web UI, reverse-proxy setups

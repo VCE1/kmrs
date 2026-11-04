@@ -1,7 +1,7 @@
 //! Desktop installation boundaries: only an installed app or per-user Windows
 //! installation can hand a verified update to its platform helper.
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -79,21 +79,20 @@ fn install_macos(
         .map_err(|e| format!("create update directory: {e}"))?;
     let downloaded = update.download_verified(work.path())?;
     unpack_app(&downloaded.path, work.path())?;
-    let staged = work.path().join("staged");
+    let staged = work.path().join("staged/KMServer.app");
+    verify_app(&staged)?;
     let helper = work.path().join("update-helper.sh");
     std::fs::write(
         &helper,
         include_bytes!("../resources/macos/update-helper.sh"),
     )
     .map_err(|e| format!("write update helper: {e}"))?;
-    let log = config_dir.join("logs/update.log");
     let script = format!(
-        "nohup /bin/sh {} {} {} {} {} {} {} </dev/null >/dev/null 2>&1 &",
+        "nohup /bin/sh {} {} {} {} {} {} </dev/null >/dev/null 2>&1 &",
         shell_arg(&helper),
         shell_arg(Path::new(&std::process::id().to_string())),
         shell_arg(app),
-        shell_arg(&staged),
-        shell_arg(&log),
+        shell_arg(work.path()),
         shell_arg(config_dir),
         port,
     );
@@ -105,9 +104,28 @@ fn install_macos(
     if !status.success() {
         return Err(format!("update helper failed to start: {status}"));
     }
-    // Keep staging files until the detached helper has moved them into place.
+    update.installing();
+    // The detached helper owns the staging files from this point.
     std::mem::forget(work);
     let _ = shutdown.send(true);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn verify_app(app: &Path) -> Result<(), String> {
+    for (program, args) in [
+        ("/usr/bin/codesign", vec!["--verify", "--deep", "--strict"]),
+        ("/usr/bin/spctl", vec!["--assess", "--type", "execute"]),
+    ] {
+        let status = std::process::Command::new(program)
+            .args(args)
+            .arg(app)
+            .status()
+            .map_err(|e| format!("verify update: {e}"))?;
+        if !status.success() {
+            return Err(format!("verify update: {status}"));
+        }
+    }
     Ok(())
 }
 
@@ -134,20 +152,17 @@ fn shell_arg(path: &Path) -> String {
 
 #[cfg(target_os = "windows")]
 pub fn installed_exe() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let installed = std::env::var_os("LOCALAPPDATA")
-        .map(PathBuf::from)?
-        .join("Programs/KMServer/kmrs.exe");
-    (exe == installed).then_some(exe)
+    crate::tray::installed_exe()
 }
 
 #[cfg(target_os = "windows")]
 pub fn start_update(
     update: DesktopUpdate,
     _app: PathBuf,
+    config_dir: PathBuf,
     shutdown: tokio::sync::watch::Sender<bool>,
 ) {
-    if let Err(e) = install_windows(&update, &shutdown) {
+    if let Err(e) = install_windows(&update, &config_dir, &shutdown) {
         update.set_failed(e.clone());
         tracing::error!("Windows update failed: {e}");
     }
@@ -156,6 +171,7 @@ pub fn start_update(
 #[cfg(target_os = "windows")]
 fn install_windows(
     update: &DesktopUpdate,
+    config_dir: &Path,
     shutdown: &tokio::sync::watch::Sender<bool>,
 ) -> Result<(), String> {
     use crate::service::desktop_update::Status;
@@ -167,13 +183,16 @@ fn install_windows(
     std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     let downloaded = update.download_verified(&directory)?;
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let install_dir = exe.parent().ok_or("installed executable has no parent")?;
     let result = std::process::Command::new(&downloaded.path)
         .arg("/S")
         .arg(format!("/UPDATEPID={}", std::process::id()))
-        .arg(format!("/RELAUNCH={}", exe.display()))
+        .arg(format!(r#"/INSTALLDIR="{}""#, install_dir.display()))
+        .arg(format!(r#"/CONFIGDIR="{}""#, config_dir.display()))
         .spawn();
     match result {
         Ok(_) => {
+            update.installing();
             let _ = shutdown.send(true);
             Ok(())
         }

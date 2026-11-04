@@ -166,6 +166,7 @@ fn run(
     let config_item = MenuItem::with_id("config", "Open configuration directory", true, None);
     let logs_item = MenuItem::with_id("logs", "Open logs folder", true, None);
     let autostart_dir = paths.config_dir.clone();
+    let update_config_dir = paths.config_dir.clone();
     let autostart_item = CheckMenuItem::with_id(
         "autostart",
         "Start with Windows",
@@ -259,9 +260,10 @@ fn run(
                 let update = update.clone();
                 let shutdown = shutdown.clone();
                 let app = installed_exe.clone().unwrap();
+                let config_dir = update_config_dir.clone();
                 std::thread::spawn(move || match update.status() {
                     crate::service::desktop_update::Status::Available(_) => {
-                        crate::desktop::start_update(update, app, shutdown)
+                        crate::desktop::start_update(update, app, config_dir, shutdown)
                     }
                     _ => {
                         let _ = update.start_check();
@@ -375,6 +377,30 @@ fn migrate_legacy_autostart() {
             RegDeleteValueW(hkey.0, wide(LEGACY_AUTOSTART_VALUE).as_ptr());
         }
     }
+}
+
+pub fn installed_exe() -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+
+    let exe = std::env::current_exe().ok()?;
+    let key = unsafe { open_install_key()? };
+    let installed = unsafe { read_autostart(key.0, "InstallDir").ok().flatten()? };
+    let installed = std::ffi::OsString::from_wide(&installed[..installed.len().saturating_sub(1)]);
+    (exe == PathBuf::from(installed).join("kmrs.exe")).then_some(exe)
+}
+
+unsafe fn open_install_key() -> Option<AutostartKey> {
+    let mut hkey: HKEY = std::ptr::null_mut();
+    let result = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            wide(r"Software\KMServer").as_ptr(),
+            0,
+            KEY_QUERY_VALUE,
+            &mut hkey,
+        )
+    };
+    (result == ERROR_SUCCESS).then_some(AutostartKey(hkey))
 }
 
 fn autostart_enabled() -> bool {

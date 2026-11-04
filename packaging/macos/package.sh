@@ -34,8 +34,12 @@ if [ -e "$APP" ] || [ -e "$DMG" ]; then
 	exit 1
 fi
 
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchAgents"
 cp "$BINARY" "$APP/Contents/MacOS/kmrs"
+cp "$SCRIPT_DIR/login-agent.plist" "$APP/Contents/Library/LaunchAgents/date.kmworks.server.login.plist"
+cp "$SCRIPT_DIR/login-agent.sh" "$APP/Contents/Resources/login-agent.sh"
+chmod +x "$APP/Contents/Resources/login-agent.sh"
+plutil -lint "$APP/Contents/Library/LaunchAgents/date.kmworks.server.login.plist"
 sed "s/@VERSION@/$VERSION/g" "$SCRIPT_DIR/Info.plist" >"$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 

@@ -94,6 +94,12 @@ jobs:
           cache-targets: "false"
       - uses: mozilla-actions/sccache-action@v0.0.11
       - run: cargo build --workspace --all-targets
+      - name: Test macOS update recovery
+        if: matrix.os == 'macos-latest'
+        run: |
+          packaging/macos/test-update-helper.sh
+          STAGED_MODE=fail packaging/macos/test-update-helper.sh
+          OLD_MODE=restore-fail STAGED_MODE=fail packaging/macos/test-update-helper.sh
       - name: Test Windows shell integration
         if: matrix.os == 'windows-latest'
         run: cargo test -p komga-server --bin kmrs tray::tests -- --test-threads=1
@@ -116,6 +122,14 @@ jobs:
           if (-not (Test-Path $makensis)) { throw "makensis not found at $makensis" }
           & $makensis /DVERSION=0.0.0 /DOUTFILE="$PWD\KMServer-setup.exe" packaging\windows\installer.nsi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test Windows installation and update
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: packaging\windows\test-update.ps1
+      - name: Clean Windows packaging inputs
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
           Remove-Item packaging\windows\kmrs.exe, packaging\windows\kmrs.ico, packaging\windows\pdfium.dll
           Remove-Item -Recurse packaging\windows\PDFium, pdfium
           Remove-Item pdfium.tgz

@@ -203,7 +203,7 @@ async fn run() -> anyhow::Result<()> {
         processor_shutdown_rx,
     );
     service::scheduler::ScanScheduler::start(state.clone());
-    service::update_check::start(state.clone());
+    let update_check = service::update_check::start(state.clone());
     service::maintenance::MaintenanceScheduler::start_auth_activity_cleanup(state.clone());
     service::maintenance::MaintenanceScheduler::start_history_cleanup(state.clone());
     if config.jdbc_session_enabled {
@@ -279,6 +279,7 @@ async fn run() -> anyhow::Result<()> {
     }
     serve_result?;
 
+    update_check.abort();
     // stop the supervisor between drains, then give the claimed tasks a bounded grace
     // period before aborting (a hung task must not prevent the process from exiting)
     drop(processor_shutdown_tx);
@@ -288,6 +289,8 @@ async fn run() -> anyhow::Result<()> {
     {
         tracing::warn!("task processor did not finish within 30s, aborting");
     }
+    drop(update_check);
+    drop(state);
     Ok(())
 }
 

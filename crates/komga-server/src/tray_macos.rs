@@ -25,6 +25,10 @@ const MENU_BAR_ICON_PNG: &[u8] = include_bytes!("../resources/windows/tray-icon.
 static APP_RUNNING: AtomicBool = AtomicBool::new(false);
 
 thread_local! {
+    static LOGIN_SERVICE: RefCell<Option<objc2::rc::Retained<SMAppService>>> = const { RefCell::new(None) };
+}
+
+thread_local! {
     // TrayIcon is main-thread only; it lives here between start() and stop()
     static STATUS_ITEM: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
     // the menu event handler must be Send+Sync, so the check item (Rc-based)
@@ -261,19 +265,27 @@ fn build(
             }
         }
         "autostart" => {
-            let service = unsafe { SMAppService::mainAppService() };
+            let service = login_service();
             match unsafe { service.status() } {
                 status if status == SMAppServiceStatus::RequiresApproval => {
                     open_login_settings();
                 }
                 status => {
                     let enable = status != SMAppServiceStatus::Enabled;
-                    let result = unsafe {
-                        if enable {
-                            service.registerAndReturnError()
-                        } else {
-                            service.unregisterAndReturnError()
-                        }
+                    let result = if enable {
+                        save_login_config(&config_dir)
+                            .map_err(|e| e.to_string())
+                            .and_then(|()| unsafe {
+                                service.registerAndReturnError().map_err(|e| e.to_string())
+                            })
+                    } else {
+                        let result = unsafe {
+                            service
+                                .unregisterAndReturnError()
+                                .map_err(|e| e.to_string())
+                        };
+                        remove_login_config();
+                        result
                     };
                     if let Err(e) = result {
                         tracing::warn!("login item unchanged: {e}");
@@ -331,8 +343,42 @@ fn open(target: &std::ffi::OsStr) {
     });
 }
 
+fn login_config_path() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| home.join("Library/Application Support/KMServer/login-config-dir"))
+}
+
+fn save_login_config(config_dir: &Path) -> std::io::Result<()> {
+    let path = login_config_path().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "app bundle is unavailable")
+    })?;
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    let temporary = path.with_extension("tmp");
+    std::fs::write(&temporary, config_dir.as_os_str().as_encoded_bytes())?;
+    std::fs::rename(temporary, path)
+}
+
+fn remove_login_config() {
+    if let Some(path) = login_config_path() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn login_service() -> objc2::rc::Retained<SMAppService> {
+    LOGIN_SERVICE.with(|slot| {
+        slot.borrow_mut()
+            .get_or_insert_with(|| unsafe {
+                SMAppService::agentServiceWithPlistName(ns_string!(
+                    "date.kmworks.server.login.plist"
+                ))
+            })
+            .clone()
+    })
+}
+
 fn autostart_enabled() -> bool {
-    (unsafe { SMAppService::mainAppService().status() }) == SMAppServiceStatus::Enabled
+    (unsafe { login_service().status() }) == SMAppServiceStatus::Enabled
 }
 
 fn refresh_autostart_item() {
