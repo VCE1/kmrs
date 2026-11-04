@@ -10,14 +10,16 @@ use std::time::Duration;
 
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
 #[cfg(not(debug_assertions))]
 use windows_sys::Win32::System::Console::FreeConsole;
 use windows_sys::Win32::System::Console::{AttachConsole, GetConsoleWindow, ATTACH_PARENT_PROCESS};
 use windows_sys::Win32::System::Registry::{
     RegCloseKey, RegDeleteValueW, RegGetValueW, RegOpenKeyExW, RegSetValueExW, HKEY,
-    HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RRF_RT_REG_SZ,
+    HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ, RRF_RT_REG_SZ,
 };
+#[cfg(test)]
+use windows_sys::Win32::System::Registry::{RegCreateKeyExW, RegDeleteKeyW};
 use windows_sys::Win32::System::StationsAndDesktops::{
     CloseDesktop, OpenInputDesktop, DESKTOP_READOBJECTS,
 };
@@ -31,7 +33,12 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 const TRAY_ICON_PNG: &[u8] = include_bytes!("../resources/windows/tray-icon.png");
 
 const AUTOSTART_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const AUTOSTART_VALUE: &str = "KMReader";
+#[cfg(test)]
+thread_local! {
+    static AUTOSTART_TEST_SUBKEY: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+const LEGACY_AUTOSTART_VALUE: &str = "KMReader";
+const AUTOSTART_VALUE: &str = "KMServer";
 
 thread_local! {
     // the menu event handler must be Send+Sync, so the check item (Rc-based)
@@ -81,7 +88,7 @@ pub fn show_startup_error(error: &anyhow::Error) {
         let text = wide(&format!(
             "{error:#}\n\nLog files are in the \"logs\" folder of the data directory."
         ));
-        let title = wide("KMReader failed to start");
+        let title = wide("KMServer failed to start");
         unsafe {
             MessageBoxW(
                 std::ptr::null_mut(),
@@ -155,7 +162,7 @@ fn run(
     update: crate::service::desktop_update::DesktopUpdate,
     ready: mpsc::Sender<Result<u32, String>>,
 ) {
-    let open_item = MenuItem::with_id("open", "Open KMReader", true, None);
+    let open_item = MenuItem::with_id("open", "Open KMServer", true, None);
     let config_item = MenuItem::with_id("config", "Open configuration directory", true, None);
     let logs_item = MenuItem::with_id("logs", "Open logs folder", true, None);
     let autostart_dir = paths.config_dir.clone();
@@ -206,7 +213,7 @@ fn run(
             // default true would pop the menu on left-button-up, making a plain
             // left click (our open-UI gesture) unreachable
             .with_menu_on_left_click(false)
-            .with_tooltip("KMReader")
+            .with_tooltip("KMServer")
             .with_icon(icon)
             .build()
             .map_err(|e| e.to_string())
@@ -220,6 +227,7 @@ fn run(
     };
 
     TRAY_ICON.with(|slot| *slot.borrow_mut() = Some(tray.clone()));
+    migrate_legacy_autostart();
 
     let refresh_update = update.clone();
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
@@ -346,56 +354,143 @@ fn refresh_update_item(update: &crate::service::desktop_update::DesktopUpdate) {
     });
 }
 
-fn autostart_enabled() -> bool {
-    let subkey = wide(AUTOSTART_SUBKEY);
-    let value = wide(AUTOSTART_VALUE);
+// Compatibility with the old startup registration; remove in 0.27.0.
+fn migrate_legacy_autostart() {
     unsafe {
-        RegGetValueW(
-            HKEY_CURRENT_USER,
-            subkey.as_ptr(),
-            value.as_ptr(),
-            RRF_RT_REG_SZ,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        ) == ERROR_SUCCESS
+        let Some(hkey) = open_autostart_key() else {
+            return;
+        };
+        if read_autostart(hkey.0, AUTOSTART_VALUE)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            RegDeleteValueW(hkey.0, wide(LEGACY_AUTOSTART_VALUE).as_ptr());
+            return;
+        }
+        let Ok(Some(command)) = read_autostart(hkey.0, LEGACY_AUTOSTART_VALUE) else {
+            return;
+        };
+        if write_autostart(hkey.0, AUTOSTART_VALUE, &command) == ERROR_SUCCESS {
+            RegDeleteValueW(hkey.0, wide(LEGACY_AUTOSTART_VALUE).as_ptr());
+        }
+    }
+}
+
+fn autostart_enabled() -> bool {
+    unsafe {
+        let Some(hkey) = open_autostart_key() else {
+            return false;
+        };
+        read_autostart(hkey.0, AUTOSTART_VALUE)
+            .ok()
+            .flatten()
+            .is_some()
+    }
+}
+
+struct AutostartKey(HKEY);
+
+impl Drop for AutostartKey {
+    fn drop(&mut self) {
+        unsafe { RegCloseKey(self.0) };
     }
 }
 
 fn set_autostart(enable: bool, config_dir: &std::path::Path) -> Result<(), String> {
     // resolved before opening the key: a failure here must not leak the handle
     let command = enable.then(|| autostart_command(config_dir)).transpose()?;
-    let subkey = wide(AUTOSTART_SUBKEY);
-    let name = wide(AUTOSTART_VALUE);
     unsafe {
-        let mut hkey: HKEY = std::ptr::null_mut();
-        let err = RegOpenKeyExW(
-            HKEY_CURRENT_USER,
-            subkey.as_ptr(),
-            0,
-            KEY_SET_VALUE,
-            &mut hkey,
-        );
-        if err != ERROR_SUCCESS {
-            return Err(format!("open Run key: error {err}"));
-        }
-        let err = match &command {
-            Some(data) => RegSetValueExW(
-                hkey,
-                name.as_ptr(),
-                0,
-                REG_SZ,
-                data.as_ptr().cast(),
-                (data.len() * 2) as u32,
-            ),
-            None => RegDeleteValueW(hkey, name.as_ptr()),
+        let Some(hkey) = open_autostart_key() else {
+            return Err("open Run key".into());
         };
-        RegCloseKey(hkey);
-        if err == ERROR_SUCCESS {
+        let result = match &command {
+            Some(data) => write_autostart(hkey.0, AUTOSTART_VALUE, data),
+            None => RegDeleteValueW(hkey.0, wide(AUTOSTART_VALUE).as_ptr()),
+        };
+        if result == ERROR_SUCCESS {
+            RegDeleteValueW(hkey.0, wide(LEGACY_AUTOSTART_VALUE).as_ptr());
+        }
+        if result == ERROR_SUCCESS {
             Ok(())
         } else {
-            Err(format!("write Run value: error {err}"))
+            Err(format!("write Run value: error {result}"))
         }
+    }
+}
+
+unsafe fn open_autostart_key() -> Option<AutostartKey> {
+    #[cfg(test)]
+    let subkey = AUTOSTART_TEST_SUBKEY
+        .with(|key| key.borrow().clone())
+        .unwrap_or_else(|| AUTOSTART_SUBKEY.into());
+    #[cfg(not(test))]
+    let subkey: String = AUTOSTART_SUBKEY.into();
+    let mut hkey: HKEY = std::ptr::null_mut();
+    let result = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            wide(&subkey).as_ptr(),
+            0,
+            KEY_QUERY_VALUE | KEY_SET_VALUE,
+            &mut hkey,
+        )
+    };
+    (result == ERROR_SUCCESS).then_some(AutostartKey(hkey))
+}
+
+unsafe fn read_autostart(hkey: HKEY, name: &str) -> Result<Option<Vec<u16>>, u32> {
+    let name = wide(name);
+    let mut bytes = 0;
+    let result = unsafe {
+        RegGetValueW(
+            hkey,
+            std::ptr::null(),
+            name.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &mut bytes,
+        )
+    };
+    if result == ERROR_FILE_NOT_FOUND {
+        return Ok(None);
+    }
+    if result != ERROR_SUCCESS {
+        return Err(result);
+    }
+    let mut data = vec![0u16; bytes as usize / size_of::<u16>()];
+    let result = unsafe {
+        RegGetValueW(
+            hkey,
+            std::ptr::null(),
+            name.as_ptr(),
+            RRF_RT_REG_SZ,
+            std::ptr::null_mut(),
+            data.as_mut_ptr().cast(),
+            &mut bytes,
+        )
+    };
+    if result != ERROR_SUCCESS {
+        return Err(result);
+    }
+    while data.last() == Some(&0) {
+        data.pop();
+    }
+    data.push(0);
+    Ok(Some(data))
+}
+
+unsafe fn write_autostart(hkey: HKEY, name: &str, data: &[u16]) -> u32 {
+    unsafe {
+        RegSetValueExW(
+            hkey,
+            wide(name).as_ptr(),
+            0,
+            REG_SZ,
+            data.as_ptr().cast(),
+            (data.len() * 2) as u32,
+        )
     }
 }
 
@@ -414,4 +509,82 @@ fn autostart_command(config_dir: &std::path::Path) -> Result<Vec<u16>, String> {
     command.push(b'"' as u16);
     command.push(0);
     Ok(command)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_autostart_is_migrated_and_disabled() {
+        let key = TestAutostartKey::new();
+        let old = wide(r#"C:\Program Files\KMReader\kmrs.exe" --config-dir "C:\data"#);
+        let new = wide("new-command");
+        unsafe {
+            assert_eq!(
+                write_autostart(key.0, LEGACY_AUTOSTART_VALUE, &old),
+                ERROR_SUCCESS
+            );
+            assert_eq!(
+                read_autostart(key.0, LEGACY_AUTOSTART_VALUE),
+                Ok(Some(old.clone()))
+            );
+            migrate_legacy_autostart();
+            assert_eq!(
+                read_autostart(key.0, AUTOSTART_VALUE),
+                Ok(Some(old.clone()))
+            );
+            assert_eq!(read_autostart(key.0, LEGACY_AUTOSTART_VALUE), Ok(None));
+            assert!(autostart_enabled());
+
+            assert_eq!(write_autostart(key.0, AUTOSTART_VALUE, &new), ERROR_SUCCESS);
+            assert_eq!(
+                write_autostart(key.0, LEGACY_AUTOSTART_VALUE, &old),
+                ERROR_SUCCESS
+            );
+            migrate_legacy_autostart();
+            assert_eq!(read_autostart(key.0, AUTOSTART_VALUE), Ok(Some(new)));
+            assert_eq!(read_autostart(key.0, LEGACY_AUTOSTART_VALUE), Ok(None));
+
+            set_autostart(false, std::path::Path::new(".")).unwrap();
+            assert!(!autostart_enabled());
+            assert_eq!(read_autostart(key.0, LEGACY_AUTOSTART_VALUE), Ok(None));
+        }
+    }
+
+    struct TestAutostartKey(HKEY);
+
+    impl TestAutostartKey {
+        fn new() -> Self {
+            let subkey = format!(r"Software\kmrs-tests\{}", std::process::id());
+            AUTOSTART_TEST_SUBKEY.with(|key| *key.borrow_mut() = Some(subkey.clone()));
+            unsafe {
+                RegDeleteKeyW(HKEY_CURRENT_USER, wide(&subkey).as_ptr());
+                let mut key = std::ptr::null_mut();
+                let result = RegCreateKeyExW(
+                    HKEY_CURRENT_USER,
+                    wide(&subkey).as_ptr(),
+                    0,
+                    std::ptr::null(),
+                    0,
+                    KEY_QUERY_VALUE | KEY_SET_VALUE,
+                    std::ptr::null(),
+                    &mut key,
+                    std::ptr::null_mut(),
+                );
+                assert_eq!(result, ERROR_SUCCESS);
+                Self(key)
+            }
+        }
+    }
+
+    impl Drop for TestAutostartKey {
+        fn drop(&mut self) {
+            let subkey = AUTOSTART_TEST_SUBKEY.with(|key| key.borrow_mut().take());
+            unsafe {
+                RegCloseKey(self.0);
+                RegDeleteKeyW(HKEY_CURRENT_USER, wide(&subkey.unwrap()).as_ptr());
+            }
+        }
+    }
 }

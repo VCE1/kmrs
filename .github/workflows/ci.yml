@@ -94,6 +94,9 @@ jobs:
           cache-targets: "false"
       - uses: mozilla-actions/sccache-action@v0.0.11
       - run: cargo build --workspace --all-targets
+      - name: Test Windows shell integration
+        if: matrix.os == 'windows-latest'
+        run: cargo test -p komga-server --bin kmrs tray::tests -- --test-threads=1
       - name: Build Windows installer
         if: matrix.os == 'windows-latest'
         shell: pwsh
