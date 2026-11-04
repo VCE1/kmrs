@@ -18,7 +18,7 @@ use objc2_app_kit::{
     NSAlertStyle, NSApplication, NSApplicationActivationPolicy, NSColor, NSEvent,
     NSEventModifierFlags, NSEventType, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
     NSLinkAttributeName, NSMenu, NSMenuItem, NSMutableParagraphStyle,
-    NSParagraphStyleAttributeName, NSTextAlignment,
+    NSParagraphStyleAttributeName, NSTextAlignment, NSWindowCollectionBehavior,
 };
 use objc2_foundation::{
     ns_string, NSActivityOptions, NSDictionary, NSMutableAttributedString, NSPoint, NSProcessInfo,
@@ -170,6 +170,11 @@ pub fn show_startup_error(error: &anyhow::Error) {
     NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
 
     let alert = NSAlert::new(mtm);
+    // on every Space, so it isn't left behind on a full-screen app's Space
+    alert.window().setCollectionBehavior(
+        NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenAuxiliary,
+    );
     alert.setAlertStyle(NSAlertStyle::Warning);
     alert.setMessageText(ns_string!("KMServer couldn't start"));
     alert.setInformativeText(&NSString::from_str(&format!(
