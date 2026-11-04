@@ -51,9 +51,17 @@ pub fn start_update(
     app: PathBuf,
     config_dir: PathBuf,
     port: u16,
+    login_service: Option<String>,
     shutdown: tokio::sync::watch::Sender<bool>,
 ) {
-    if let Err(e) = install_macos(&update, &app, &config_dir, port, &shutdown) {
+    if let Err(e) = install_macos(
+        &update,
+        &app,
+        &config_dir,
+        port,
+        login_service.as_deref(),
+        &shutdown,
+    ) {
         update.set_failed(e.clone());
         tracing::error!("macOS update failed: {e}");
     }
@@ -65,6 +73,7 @@ fn install_macos(
     app: &Path,
     config_dir: &Path,
     port: u16,
+    login_service: Option<&str>,
     shutdown: &tokio::sync::watch::Sender<bool>,
 ) -> Result<(), String> {
     use crate::service::desktop_update::Status;
@@ -88,17 +97,21 @@ fn install_macos(
     )
     .map_err(|e| format!("write update helper: {e}"))?;
     let script = format!(
-        "nohup /bin/sh {} {} {} {} {} {} </dev/null >/dev/null 2>&1 &",
+        "nohup /bin/sh {} {} {} {} {} {} {} </dev/null >/dev/null 2>&1 &",
         shell_arg(&helper),
         shell_arg(Path::new(&std::process::id().to_string())),
         shell_arg(app),
         shell_arg(work.path()),
         shell_arg(config_dir),
         port,
+        shell_arg(Path::new(login_service.unwrap_or_default())),
     );
+    // nohup only ignores SIGHUP; launchd kills the job's whole process group on exit
+    use std::os::unix::process::CommandExt;
     let status = std::process::Command::new("/bin/sh")
         .arg("-c")
         .arg(script)
+        .process_group(0)
         .status()
         .map_err(|e| format!("start update helper: {e}"))?;
     if !status.success() {
@@ -145,7 +158,7 @@ fn unpack_app(archive: &Path, directory: &Path) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn shell_arg(path: &Path) -> String {
+pub(crate) fn shell_arg(path: &Path) -> String {
     let text = path.to_string_lossy();
     format!("'{}'", text.replace('\'', "'\\''"))
 }

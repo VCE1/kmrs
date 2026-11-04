@@ -34,6 +34,74 @@ const MENU_BAR_ICON_PNG: &[u8] = include_bytes!("../resources/windows/tray-icon.
 /// loop to own a menu bar item (no graphic access, e.g. SSH or a LaunchDaemon).
 static APP_RUNNING: AtomicBool = AtomicBool::new(false);
 
+/// The launchd label of the login item, `packaging/macos/login-agent.plist`.
+const LOGIN_AGENT_LABEL: &str = "date.kmworks.server.login";
+
+/// Set once the server listens: a failure before it is a startup error, one
+/// after it is a crash for launchd to restart.
+static SERVING: AtomicBool = AtomicBool::new(false);
+
+pub fn mark_serving() {
+    SERVING.store(true, Ordering::SeqCst);
+}
+
+/// Whether the listener came up: after it, an error ends the server rather
+/// than a launch, so the startup alert no longer applies.
+pub fn serving() -> bool {
+    SERVING.load(Ordering::SeqCst)
+}
+
+/// Whether launchd started this process as the login item. launchd sets
+/// `XPC_SERVICE_NAME` to the job label, but child processes inherit it, so the
+/// parent must be launchd as well (`login-agent.sh` execs the server).
+fn launched_by_login_agent() -> bool {
+    std::env::var_os("XPC_SERVICE_NAME").is_some_and(|name| name == LOGIN_AGENT_LABEL)
+        && unsafe { libc::getppid() } == 1
+}
+
+/// The login item restarts the server whenever it exits unsuccessfully. A
+/// startup failure (invalid config, port in use) would fail the same way on
+/// every restart, so it ends with a successful exit instead and stays down.
+pub fn startup_failure_exits_cleanly() -> bool {
+    launched_by_login_agent() && !SERVING.load(Ordering::SeqCst)
+}
+
+/// A plain launch from Finder, the Dock or Spotlight while Open at Login is on
+/// starts the login item instead, so launchd restarts that server after a
+/// crash as well. Launches with arguments or from a terminal run as before.
+/// True when the login item took over and this process should exit.
+pub fn hand_off_to_login_item() -> bool {
+    use clap::Parser;
+    if std::env::args_os().len() > 1
+        || crate::desktop::app_bundle_path().is_none()
+        || std::io::stderr().is_terminal()
+        || launched_by_login_agent()
+    {
+        return false;
+    }
+    let Ok(cli) = crate::config::Cli::try_parse() else {
+        return false;
+    };
+    let Some(service) = login_item_service(&crate::config::config_dir(&cli)) else {
+        return false;
+    };
+    std::process::Command::new("/bin/launchctl")
+        .args(["kickstart", &service])
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+/// The login item's launchd service target when Open at Login is on and runs
+/// the server with this data directory, so starting it brings up the same server.
+fn login_item_service(config_dir: &Path) -> Option<String> {
+    if !autostart_enabled() {
+        return None;
+    }
+    let saved = std::fs::read(login_config_path()?).ok()?;
+    (saved == config_dir.as_os_str().as_encoded_bytes())
+        .then(|| format!("gui/{}/{LOGIN_AGENT_LABEL}", unsafe { libc::getuid() }))
+}
+
 thread_local! {
     static LOGIN_SERVICE: RefCell<Option<objc2::rc::Retained<SMAppService>>> = const { RefCell::new(None) };
 }
@@ -356,6 +424,11 @@ fn build(
                                 .map_err(|e| e.to_string())
                         };
                         remove_login_config();
+                        // launchd stops the login item's server along with the
+                        // login item, so that server starts again on its own
+                        if result.is_ok() && launched_by_login_agent() {
+                            relaunch_after_exit(&config_dir);
+                        }
                         result
                     };
                     if let Err(e) = result {
@@ -374,9 +447,17 @@ fn build(
                 let shutdown = shutdown.clone();
                 let app = crate::desktop::app_bundle_path().unwrap();
                 let config_dir = config_dir.clone();
+                let login_service = login_item_service(&config_dir);
                 std::thread::spawn(move || match update.status() {
                     crate::service::desktop_update::Status::Available(_) => {
-                        crate::desktop::start_update(update, app, config_dir, port, shutdown)
+                        crate::desktop::start_update(
+                            update,
+                            app,
+                            config_dir,
+                            port,
+                            login_service,
+                            shutdown,
+                        )
                     }
                     _ => {
                         let _ = update.start_check();
@@ -433,6 +514,35 @@ fn save_login_config(config_dir: &Path) -> std::io::Result<()> {
 fn remove_login_config() {
     if let Some(path) = login_config_path() {
         let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Opens the app again with the same data directory once this process has
+/// exited, giving up if it is still running after a minute. The waiting script
+/// runs in its own process group, which launchd's cleanup of the login item's
+/// process group does not reach.
+fn relaunch_after_exit(config_dir: &Path) {
+    use std::os::unix::process::CommandExt;
+    let Some(app) = crate::desktop::app_bundle_path() else {
+        return;
+    };
+    let script = format!(
+        "nohup /bin/sh -c 'waited=0; \
+         while kill -0 {pid} 2>/dev/null && [ $waited -lt 60 ]; do \
+         sleep 1; waited=$((waited + 1)); done; \
+         kill -0 {pid} 2>/dev/null || exec /usr/bin/open -n \"$0\" --args --config-dir \"$1\"' \
+         {app} {dir} </dev/null >/dev/null 2>&1 &",
+        pid = std::process::id(),
+        app = crate::desktop::shell_arg(&app),
+        dir = crate::desktop::shell_arg(config_dir),
+    );
+    let started = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .process_group(0)
+        .status();
+    if !started.is_ok_and(|status| status.success()) {
+        tracing::warn!("could not schedule the restart after leaving the login item");
     }
 }
 

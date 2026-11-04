@@ -74,14 +74,60 @@ async fn main() -> anyhow::Result<()> {
 // is driven from whichever thread run_app hands the server to
 #[cfg(target_os = "macos")]
 fn main() -> anyhow::Result<()> {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    if tray::hand_off_to_login_item() {
+        return Ok(());
+    }
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()?;
-    let result = tray::run_app(move || runtime.block_on(run()));
+        .build()
+    {
+        Ok(runtime) => runtime,
+        // a failed runtime build is a startup error too: under the login item
+        // it must not relaunch into the same resource exhaustion every 30s
+        Err(e) => {
+            let error = anyhow::Error::new(e).context("build the async runtime");
+            tray::show_startup_error(&error);
+            if tray::startup_failure_exits_cleanly() {
+                std::process::exit(0);
+            }
+            return Err(error);
+        }
+    };
+    // under the login item a panic before the listener is up is a startup error
+    // like any other; elsewhere, and once serving, it keeps unwinding so the
+    // process exits as crashed
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        tray::run_app(move || runtime.block_on(run()))
+    }));
+    let result = match outcome {
+        Ok(result) => result,
+        Err(panic) if tray::startup_failure_exits_cleanly() => Err(anyhow::anyhow!(
+            "unexpected error: {}",
+            panic_message(panic.as_ref())
+        )),
+        Err(panic) => std::panic::resume_unwind(panic),
+    };
     if let Err(e) = &result {
-        tray::show_startup_error(e);
+        // a failure after serving is a crash for launchd to restart: a modal
+        // alert would hold the process down until someone dismisses it
+        if !tray::serving() {
+            tray::show_startup_error(e);
+        }
+        // after the modal alert returns, so the process stays up while it shows
+        if tray::startup_failure_exits_cleanly() {
+            std::process::exit(0);
+        }
     }
     result
+}
+
+#[cfg(target_os = "macos")]
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("the server panicked")
 }
 
 async fn run() -> anyhow::Result<()> {
@@ -247,6 +293,8 @@ async fn run() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
+    #[cfg(target_os = "macos")]
+    tray::mark_serving();
     // startup output had its chance to reach an invoking terminal; serving must
     // not die with a terminal the user closes later
     #[cfg(target_os = "windows")]
@@ -366,8 +414,25 @@ pub fn build_router(state: AppState) -> axum::Router {
 }
 
 async fn shutdown_signal(mut shutdown_rx: tokio::sync::watch::Receiver<bool>) {
+    // launchd stops a login item with SIGTERM: at logout, and when Open at Login
+    // is turned off while the login item runs the server
+    #[cfg(target_os = "macos")]
+    let terminate = async {
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                tracing::warn!("SIGTERM handler unavailable: {e}");
+                std::future::pending::<()>().await;
+            }
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let terminate = std::future::pending::<()>();
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
+        _ = terminate => {},
         _ = shutdown_rx.changed() => {},
     }
     tracing::info!("shutting down");

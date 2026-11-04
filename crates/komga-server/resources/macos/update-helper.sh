@@ -8,6 +8,8 @@ app="$2"
 update_dir="$3"
 config_dir="$4"
 port="$5"
+# the login item's launchd service, when the server should run under it
+service="${6:-}"
 staged="$update_dir/staged/KMServer.app"
 log="$config_dir/logs/update.log"
 backup="${app}.update-backup"
@@ -26,15 +28,23 @@ cleanup() {
 trap cleanup EXIT
 
 launch_and_check() {
+	if [ -n "$service" ]; then
+		check_service
+		return
+	fi
+	# job control starts the server in its own process group, so it outlives
+	# anything that ends this script's group
+	set -m
 	"$app/Contents/MacOS/kmrs" --config-dir "$config_dir" &
 	new_pid=$!
+	set +m
 	waited=0
 	while [ "$waited" -lt 30 ]; do
 		kill -0 "$new_pid" 2>/dev/null || {
 			wait "$new_pid" || true
 			return 1
 		}
-		if curl -fsS "http://127.0.0.1:$port/actuator/health" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'; then
+		if server_healthy; then
 			sleep 1
 			if kill -0 "$new_pid" 2>/dev/null; then
 				return 0
@@ -47,6 +57,26 @@ launch_and_check() {
 	done
 	kill "$new_pid" 2>/dev/null || true
 	wait "$new_pid" || true
+	return 1
+}
+
+server_healthy() {
+	curl -fsS "http://127.0.0.1:$port/actuator/health" 2>/dev/null | grep -q '"status"[[:space:]]*:[[:space:]]*"UP"'
+}
+
+# launchd starts the server, so it relaunches it after a crash; -k replaces a
+# failed new server that is still running when the previous app is restored
+check_service() {
+	launchctl kickstart -k "$service" || return 1
+	waited=0
+	while [ "$waited" -lt 30 ]; do
+		if server_healthy; then
+			sleep 1
+			server_healthy && return 0
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
 	return 1
 }
 
