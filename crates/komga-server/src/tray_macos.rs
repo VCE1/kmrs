@@ -10,12 +10,20 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use dispatch2::DispatchQueue;
+use objc2::runtime::AnyObject;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSAlert, NSAlertSecondButtonReturn, NSAlertStyle, NSApplication, NSApplicationActivationPolicy,
-    NSEvent, NSEventModifierFlags, NSEventType,
+    NSAboutPanelOptionApplicationName, NSAboutPanelOptionApplicationVersion,
+    NSAboutPanelOptionCredits, NSAboutPanelOptionVersion, NSAlert, NSAlertSecondButtonReturn,
+    NSAlertStyle, NSApplication, NSApplicationActivationPolicy, NSColor, NSEvent,
+    NSEventModifierFlags, NSEventType, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+    NSLinkAttributeName, NSMenu, NSMenuItem, NSMutableParagraphStyle,
+    NSParagraphStyleAttributeName, NSTextAlignment,
 };
-use objc2_foundation::{ns_string, NSActivityOptions, NSPoint, NSProcessInfo, NSString, NSURL};
+use objc2_foundation::{
+    ns_string, NSActivityOptions, NSDictionary, NSMutableAttributedString, NSPoint, NSProcessInfo,
+    NSRange, NSString, NSURL,
+};
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -64,8 +72,9 @@ where
     }
 
     let app = NSApplication::sharedApplication(mtm);
-    // no Dock icon and no app menu: the menu bar item is the whole UI
+    // no Dock icon and no visible app menu: the menu bar item is the whole UI
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    install_edit_menu(&app, mtm);
 
     // a windowless accessory app is eligible for App Nap, which would throttle
     // timers, CPU and I/O while the server is busy; idle system sleep stays allowed
@@ -259,6 +268,7 @@ fn build(
             None,
         )
     });
+    let about_item = MenuItem::with_id("about", "About KMServer", true, None);
     let quit_item = MenuItem::with_id("quit", "Quit KMServer", true, None);
     let update_item = crate::desktop::app_bundle_path().map(|_| {
         MenuItem::with_id(
@@ -281,10 +291,11 @@ fn build(
         let _ = menu.append(&PredefinedMenuItem::separator());
         let _ = menu.append(item);
     }
+    let _ = menu.append(&PredefinedMenuItem::separator());
     if let Some(item) = &update_item {
         let _ = menu.append(item);
     }
-    let _ = menu.append(&PredefinedMenuItem::separator());
+    let _ = menu.append(&about_item);
     let _ = menu.append(&quit_item);
 
     let icon = load_icon().map_err(|e| format!("menu bar icon decode: {e}"))?;
@@ -312,6 +323,7 @@ fn build(
     }));
     MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
         "open" => open_in_browser(port),
+        "about" => show_about(port),
         "config" => open(config_dir.as_os_str()),
         "logs" => {
             if let Some(dir) = &logs_dir {
@@ -464,4 +476,191 @@ fn open_login_settings() {
     ))
     .unwrap();
     objc2_app_kit::NSWorkspace::sharedWorkspace().openURL(&url);
+}
+
+/// The address another device on the network uses to reach this server, read
+/// each time it is shown so it follows network changes. None without a usable
+/// network address: localhost would only point another device at itself.
+fn server_url(port: u16) -> Option<String> {
+    lan_ipv4().map(|ip| format!("http://{ip}:{port}"))
+}
+
+/// The IPv4 address of an interface that is up. Ethernet and Wi-Fi (`en*`)
+/// outrank VPN tunnels and virtual bridges even when those hold private
+/// addresses: a tunnel address only reaches the server through the tunnel,
+/// which another LAN device does not have. Among `en*` candidates the default
+/// route's interface wins, then private over public, then enumeration order.
+fn lan_ipv4() -> Option<std::net::Ipv4Addr> {
+    let default_interface = default_route_interface();
+    let mut best: Option<(u8, std::net::Ipv4Addr)> = None;
+    let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
+    if unsafe { libc::getifaddrs(&mut list) } != 0 {
+        return None;
+    }
+    let mut cursor = list;
+    while !cursor.is_null() {
+        let entry = unsafe { &*cursor };
+        cursor = entry.ifa_next;
+        let up = entry.ifa_flags & libc::IFF_UP as u32 != 0;
+        let loopback = entry.ifa_flags & libc::IFF_LOOPBACK as u32 != 0;
+        if !up || loopback || entry.ifa_addr.is_null() {
+            continue;
+        }
+        if i32::from(unsafe { (*entry.ifa_addr).sa_family }) != libc::AF_INET {
+            continue;
+        }
+        let address = unsafe { &*entry.ifa_addr.cast::<libc::sockaddr_in>() };
+        let ip = std::net::Ipv4Addr::from(u32::from_be(address.sin_addr.s_addr));
+        if ip.is_link_local() {
+            continue;
+        }
+        let name = unsafe { std::ffi::CStr::from_ptr(entry.ifa_name) }.to_bytes();
+        let ethernet = name.starts_with(b"en");
+        let rank = match (
+            ethernet,
+            default_interface.as_deref() == Some(name),
+            ip.is_private(),
+        ) {
+            (true, true, true) => 5,
+            (true, true, false) => 4,
+            (true, false, true) => 3,
+            (true, false, false) => 2,
+            (false, _, true) => 1,
+            (false, _, false) => 0,
+        };
+        if best.is_none_or(|(best_rank, _)| rank > best_rank) {
+            best = Some((rank, ip));
+        }
+    }
+    unsafe { libc::freeifaddrs(list) };
+    best.map(|(_, ip)| ip)
+}
+
+/// The interface the default IPv4 route points at, from the route command's
+/// stable output rather than the undocumented route-socket wire format. Runs
+/// only when the About window opens, so a child process is cheap; None when
+/// there is no default route, and VPN-scoped defaults lose to the real one
+/// because the command reports the primary default route.
+fn default_route_interface() -> Option<Vec<u8>> {
+    let output = std::process::Command::new("/sbin/route")
+        .args(["-n", "get", "-inet", "default"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.lines()
+        .find_map(|line| line.trim().strip_prefix("interface: "))
+        .map(|name| name.trim().as_bytes().to_vec())
+}
+
+const DOCUMENTATION_URL: &str = "https://kmworks.date/server/";
+
+/// The standard About window, with a documentation link and the address other
+/// devices use to reach this server in the credits. Name and version are passed
+/// explicitly so a binary outside the app bundle shows them too.
+fn show_about(port: u16) {
+    use objc2::AllocAnyThread;
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let app = NSApplication::sharedApplication(mtm);
+    // a menu bar app is never frontmost by itself; activate() needs macOS 14 and
+    // the app supports macOS 13
+    #[allow(deprecated)]
+    app.activateIgnoringOtherApps(true);
+
+    let address_line = match server_url(port) {
+        Some(url) => format!("Server address: {url}"),
+        None => "Server address: no network connection".to_string(),
+    };
+    let text = format!("Documentation\n{address_line}");
+    let credits = NSMutableAttributedString::initWithString(
+        NSMutableAttributedString::alloc(),
+        &NSString::from_str(&text),
+    );
+    // NSRange counts UTF-16 units; the parts are slices of text, so find cannot miss
+    let range_of = |part: &str| {
+        let start = text
+            .find(part)
+            .expect("attribute range outside the credits text");
+        NSRange::new(
+            text[..start].encode_utf16().count(),
+            part.encode_utf16().count(),
+        )
+    };
+    let paragraph = NSMutableParagraphStyle::new();
+    paragraph.setAlignment(NSTextAlignment::Center);
+    let font = NSFont::systemFontOfSize(NSFont::smallSystemFontSize());
+    let grey = NSColor::secondaryLabelColor();
+    unsafe {
+        credits.addAttribute_value_range(
+            NSParagraphStyleAttributeName,
+            &paragraph,
+            range_of(&text),
+        );
+        credits.addAttribute_value_range(NSFontAttributeName, &font, range_of(&text));
+        credits.addAttribute_value_range(
+            NSForegroundColorAttributeName,
+            &grey,
+            range_of(&address_line),
+        );
+        if let Some(url) = NSURL::URLWithString(&NSString::from_str(DOCUMENTATION_URL)) {
+            credits.addAttribute_value_range(NSLinkAttributeName, &url, range_of("Documentation"));
+        }
+        // paragraph spacing only takes effect through a paragraph style, so the
+        // first paragraph gets its own style to set the address apart from the link
+        let spaced = NSMutableParagraphStyle::new();
+        spaced.setAlignment(NSTextAlignment::Center);
+        spaced.setParagraphSpacing(6.0);
+        credits.addAttribute_value_range(
+            NSParagraphStyleAttributeName,
+            &spaced,
+            range_of("Documentation\n"),
+        );
+    }
+
+    let version = NSString::from_str(env!("CARGO_PKG_VERSION"));
+    // an empty build version keeps the window from repeating the version in
+    // parentheses
+    let build = ns_string!("");
+    let keys = unsafe {
+        [
+            NSAboutPanelOptionApplicationName,
+            NSAboutPanelOptionApplicationVersion,
+            NSAboutPanelOptionVersion,
+            NSAboutPanelOptionCredits,
+        ]
+    };
+    let objects: [&AnyObject; 4] = [ns_string!("KMServer"), &version, build, &credits];
+    let options = NSDictionary::from_slices(&keys, &objects);
+    unsafe { app.orderFrontStandardAboutPanelWithOptions(&options) };
+}
+
+/// Key equivalents like Cmd+C are dispatched through the main menu. An accessory
+/// app never shows one, but without it text in its windows (the About credits)
+/// can only be copied through the context menu.
+fn install_edit_menu(app: &NSApplication, mtm: MainThreadMarker) {
+    use objc2::MainThreadOnly;
+    let edit = NSMenu::initWithTitle(NSMenu::alloc(mtm), ns_string!("Edit"));
+    for (title, action, key) in [
+        ("Copy", objc2::sel!(copy:), "c"),
+        ("Select All", objc2::sel!(selectAll:), "a"),
+    ] {
+        let item = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                NSMenuItem::alloc(mtm),
+                &NSString::from_str(title),
+                Some(action),
+                &NSString::from_str(key),
+            )
+        };
+        edit.addItem(&item);
+    }
+    let edit_item = NSMenuItem::new(mtm);
+    edit_item.setSubmenu(Some(&edit));
+    let main = NSMenu::new(mtm);
+    main.addItem(&edit_item);
+    app.setMainMenu(Some(&main));
 }

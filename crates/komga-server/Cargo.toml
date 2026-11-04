@@ -96,18 +96,28 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",
     "NSAlert",
     "NSApplication",
+    "NSAttributedString",
+    "NSColor",
     "NSEvent",
+    "NSFont",
     "NSGraphicsContext",
+    "NSMenu",
+    "NSMenuItem",
+    "NSParagraphStyle",
     "NSResponder",
     "NSRunningApplication",
+    "NSText",
     "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
     "std",
+    "NSAttributedString",
     "NSDate",
+    "NSDictionary",
     "NSGeometry",
     "NSObject",
     "NSProcessInfo",
+    "NSRange",
     "NSString",
 ] }
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
