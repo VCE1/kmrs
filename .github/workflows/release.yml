@@ -158,6 +158,7 @@ jobs:
             dist \
             aarch64
           ditto -c -k --keepParent dist/KMServer.app dist/KMServer.zip
+          rm -rf dist/KMServer.app
       - name: Package (unix)
         if: matrix.os != 'windows-latest' && matrix.os != 'macos-latest'
         shell: bash
