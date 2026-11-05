@@ -120,7 +120,7 @@ jobs:
       - name: Install macOS packaging tools
         if: matrix.os == 'macos-latest'
         run: brew install librsvg
-      - name: Package KMServer.app (macOS)
+      - name: Check macOS signing secrets
         if: matrix.os == 'macos-latest'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -135,6 +135,23 @@ jobs:
               exit 1
             fi
           done
+      - name: Import macOS signing certificate
+        if: matrix.os == 'macos-latest'
+        id: codesign
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          keychain: kmrs-signing
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - name: Package KMServer.app (macOS)
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          SIGNING_KEYCHAIN: kmrs-signing.keychain
+          SIGNING_IDENTITIES: ${{ steps.codesign.outputs.identities }}
+        run: |
           packaging/macos/package.sh \
             "target/${{ matrix.target }}/release/kmrs" \
             "${{ needs.version.outputs.version }}" \
