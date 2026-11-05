@@ -65,7 +65,9 @@
     "splitWide": "Breite Seiten teilen",
     "stretchSmall": "Kleine Seiten vergrößern",
     "tapZones": "Tippbereiche",
-    "filters": "Filter"
+    "filters": "Filter",
+    "customized": "Diese Serie hat eigene Einstellungen",
+    "resetOverrides": "Auf Standard zurücksetzen"
   },
   "filter": {
     "brightness": "Helligkeit",

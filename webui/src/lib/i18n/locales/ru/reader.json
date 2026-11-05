@@ -65,7 +65,9 @@
     "splitWide": "Разделять широкие страницы",
     "stretchSmall": "Увеличивать маленькие страницы",
     "tapZones": "Зоны нажатия",
-    "filters": "Фильтры"
+    "filters": "Фильтры",
+    "customized": "У этой серии свои настройки",
+    "resetOverrides": "Сбросить до общих"
   },
   "filter": {
     "brightness": "Яркость",

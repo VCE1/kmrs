@@ -28,6 +28,30 @@ pnpm lint     # eslint
 10. **i18n**: all user-facing strings go through react-i18next (`t()` / `<Trans>`), never literal JSX text or string-valued attributes (`aria-label`, `title`, `placeholder`). Locale resources live in `src/lib/i18n/locales/<lang>/<namespace>.json` and are registered by glob — adding a file needs no other wiring; `en` is the source language and every other locale mirrors its key set (the supported-language list is declared in the i18n module). Shared vocabulary and enum label maps live in the `common` namespace; feature areas use their own. Plurals use i18next `count` with the locale's CLDR categories as key suffixes (`key_one`/`key_other` for en, `key_other` only for CJK, `key_one`/`key_few`/`key_many`/`key_other` for ru, …); sentences with dynamic parts use interpolation, never string concatenation. Backend error messages pass through untranslated. Dates and relative times go through the locale-aware helpers in the format utils, not ad-hoc `toLocaleString` calls; page titles go through `useDocumentTitle`.
 11. **PWA**: vite-plugin-pwa/Workbox generates the service worker and precaches only the app shell; the worker never caches backend traffic or reading data, and every backend route prefix, including nested callbacks such as `/login/oauth2`, must be added to the navigation fallback denylist. New versions activate automatically and reload all open clients. Home-screen icons are pre-rendered PNGs from the official KMReader 2048 canvas (light brand: white icon fill, maskable keeps the glyph inside the safe zone, monochrome is the silhouette for Android themed icons); splash `background_color` must match the icon fill.
 
+## Reader settings
+
+- Reader settings are two-tier: persisted global defaults (the reader settings store) plus
+  per-series overrides (the reader overrides store, keyed by series id). Only content-dependent
+  settings are overridable — reading direction, page layout, scale, split-wide, filters; personal
+  preferences (background, animations, transitions, tap zones, swipe, fullscreen, continuous-mode
+  geometry, EPUB typography) stay global so they behave the same everywhere. The reader route
+  merges the tiers — override first, and for the reading direction the series metadata sits
+  between override and global — and serves the result through the effective-settings context.
+  Reader components read and write the effective settings for overridable keys and the global
+  store for the rest; the account settings page is the only editor of the global defaults.
+  Writing a value equal to the fallback deletes the override key, so the series follows the
+  fallback again; emptied entries disappear, and the store is pruned to a bounded number of
+  most recently used entries, kept warm by opening the series.
+- The fallback differs per key. For layout options it is the global default; writing the global
+  value back deletes the override. The reading direction is exempt from that comparison: its
+  fallback is the resolved direction (series metadata, else global), which only the reader
+  route knows, so the direction writer compares there and writes undefined for the fallback
+  value. Filters have no global default at all — they are content processing tuned per series,
+  so they live only in the overrides store and their fallback is no filters; do not add a
+  global filters setting.
+- A newly overridable setting must be added to the overridable-keys list, the merge in the
+  effective-settings hook, and this note if the rule changes.
+
 ## Cards
 
 - Grid cards (books, series) navigate to the detail page; only horizontal cards (Keep Reading) open the reader directly. The card menu complements the tap and never duplicates it: grid cards get a Read action, horizontal cards get Book details — Read and Details are mutually exclusive. Every Read entry point is paired with a Peek action (reader with `?incognito=true`, no progress saved) — grid card menus, the series/readlist/book/oneshot detail pages; the horizontal Keep Reading cards are the exception.

@@ -108,6 +108,7 @@
     "layoutSingle": "Одиночная",
     "layoutDouble": "Двойная",
     "layoutDoubleNoCover": "Двойная без обложки",
+    "splitWide": "Разделять широкие страницы",
     "background": "Фон",
     "backgroundLabel": "Фон {{color}}",
     "backgrounds": {

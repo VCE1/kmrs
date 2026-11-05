@@ -105,6 +105,7 @@
     "layoutSingle": "単ページ",
     "layoutDouble": "見開き",
     "layoutDoubleNoCover": "見開き（表紙なし）",
+    "splitWide": "見開きページを分割",
     "background": "背景",
     "backgroundLabel": "背景 {{color}}",
     "backgrounds": {

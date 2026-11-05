@@ -105,6 +105,7 @@
     "layoutSingle": "한 페이지",
     "layoutDouble": "두 페이지",
     "layoutDoubleNoCover": "두 페이지(표지 제외)",
+    "splitWide": "넓은 페이지 분할",
     "background": "배경",
     "backgroundLabel": "배경 {{color}}",
     "backgrounds": {

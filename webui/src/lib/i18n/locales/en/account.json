@@ -106,6 +106,7 @@
     "layoutSingle": "Single",
     "layoutDouble": "Double",
     "layoutDoubleNoCover": "Double no cover",
+    "splitWide": "Split wide pages",
     "background": "Background",
     "backgroundLabel": "Background {{color}}",
     "backgrounds": {

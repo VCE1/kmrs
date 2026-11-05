@@ -18,6 +18,10 @@ import {
   type ContinuousScaleType,
   type ScaleType,
 } from '@/lib/store/readerSettings'
+import {
+  EffectiveReaderSettingsContext,
+  useEffectiveReaderSettings,
+} from '@/components/reader/effectiveSettings'
 import { needsConvert, supportedImageFormats } from '@/lib/utils/imageSupport'
 import { showToast } from '@/lib/store/toast'
 import { urls } from '@/lib/utils/urls'
@@ -99,11 +103,8 @@ function Reader({ bookId }: { bookId: string }) {
   } = useReaderNav(bookId)
   const initialPageParam = Number(searchParams.get('page'))
 
-  const settingsDirection = useReaderSettings((s) => s.readingDirection)
+  const globalDirection = useReaderSettings((s) => s.readingDirection)
   const background = useReaderBackground()
-  const tint = useReaderSettings((s) => s.filters.tint)
-  const pageLayout = useReaderSettings((s) => s.pageLayout)
-  const splitWide = useReaderSettings((s) => s.splitWide)
   const user = useAuthStore((s) => s.user)
   const admin = isAdmin(user)
 
@@ -116,6 +117,18 @@ function Reader({ bookId }: { bookId: string }) {
     queryFn: () => seriesApi.get(book!.seriesId),
     enabled: !!book,
   })
+
+  // per-series overrides beat the global defaults; the direction alone defers to
+  // series metadata when the series has no override of its own
+  const metaDirection = seriesQuery.data?.metadata.readingDirection ?? null
+  const effective = useEffectiveReaderSettings(book?.seriesId ?? '', metaDirection)
+  const direction = effective.settings.readingDirection
+  const pageLayout = effective.settings.pageLayout
+  const splitWide = effective.settings.splitWide
+  const scale = effective.settings.scale
+  const updateOverrides = effective.update
+  const tint = effective.settings.filters.tint
+
   const pagesQuery = useQuery({
     queryKey: ['books', 'pages', bookId],
     enabled: !reflowableEpub,
@@ -157,11 +170,7 @@ function Reader({ bookId }: { bookId: string }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [explorerOpen, setExplorerOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
-  // series metadata can override the direction for this session only
-  const [sessionDirection, setSessionDirection] = useState<ReadingDirection | null>(null)
   const [posterBusy, setPosterBusy] = useState(false)
-
-  const direction = sessionDirection ?? settingsDirection
 
   // the server marks a book read as soon as the saved page is the last one, so the first
   // half of a split final page reports nothing; the second half reports the page normally
@@ -225,19 +234,15 @@ function Reader({ bookId }: { bookId: string }) {
   )
 
   const series = seriesQuery.data
-  const meta = series?.metadata.readingDirection
-  const [metaChecked, setMetaChecked] = useState(false)
-  if (series && !metaChecked) {
-    setMetaChecked(true)
-    if (meta && meta !== settingsDirection) setSessionDirection(meta)
-  }
 
   const metaNotified = useRef(false)
   useEffect(() => {
     if (!series || metaNotified.current) return
     metaNotified.current = true
-    if (meta && meta !== settingsDirection) showToast(t('toast.directionFromMetadata'))
-  }, [series, meta, settingsDirection, t])
+    // only announce the metadata direction when it actually applies: a per-series override shadows it
+    if (metaDirection && metaDirection !== globalDirection && !effective.overriddenKeys.includes('readingDirection'))
+      showToast(t('toast.directionFromMetadata'))
+  }, [series, metaDirection, globalDirection, effective.overriddenKeys, t])
 
   useDocumentTitle(book ? book.metadata.title || book.name : undefined)
 
@@ -254,32 +259,32 @@ function Reader({ bookId }: { bookId: string }) {
 
   const changeDirection = useCallback(
     (d: ReadingDirection) => {
-      useReaderSettings.getState().update({ readingDirection: d })
-      setSessionDirection(null)
+      // the baseline is what the series resolves to without an override (metadata,
+      // else global): writing that value back deletes the key instead of storing it
+      updateOverrides({ readingDirection: d === (metaDirection ?? globalDirection) ? undefined : d })
       showToast(t('toast.direction', { direction: readingDirectionLabel(d) }))
     },
-    [t],
+    [t, updateOverrides, metaDirection, globalDirection],
   )
 
   const cycleScale = useCallback(() => {
-    const s = useReaderSettings.getState()
     if (direction === 'WEBTOON') {
+      const s = useReaderSettings.getState()
       const v = CONTINUOUS_SCALE_CYCLE[(CONTINUOUS_SCALE_CYCLE.indexOf(s.continuousScale) + 1) % CONTINUOUS_SCALE_CYCLE.length]
       s.update({ continuousScale: v })
       showToast(t('toast.scale', { scale: t(SCALE_LABEL_KEYS[v]) }))
     } else {
-      const v = SCALE_CYCLE[(SCALE_CYCLE.indexOf(s.scale) + 1) % SCALE_CYCLE.length]
-      s.update({ scale: v })
+      const v = SCALE_CYCLE[(SCALE_CYCLE.indexOf(scale) + 1) % SCALE_CYCLE.length]
+      updateOverrides({ scale: v })
       showToast(t('toast.scale', { scale: t(SCALE_LABEL_KEYS[v]) }))
     }
-  }, [direction, t])
+  }, [direction, t, scale, updateOverrides])
 
   const cycleLayout = useCallback(() => {
-    const s = useReaderSettings.getState()
-    const v = LAYOUT_CYCLE[(LAYOUT_CYCLE.indexOf(s.pageLayout) + 1) % LAYOUT_CYCLE.length]
-    s.update({ pageLayout: v })
+    const v = LAYOUT_CYCLE[(LAYOUT_CYCLE.indexOf(pageLayout) + 1) % LAYOUT_CYCLE.length]
+    updateOverrides({ pageLayout: v })
     showToast(t('toast.layout', { layout: t(LAYOUT_LABEL_KEYS[v]) }))
-  }, [t])
+  }, [t, pageLayout, updateOverrides])
 
   const cyclePadding = useCallback(() => {
     const s = useReaderSettings.getState()
@@ -487,8 +492,9 @@ function Reader({ bookId }: { bookId: string }) {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ background: READER_BACKGROUNDS[background] }}>
-      {direction === 'WEBTOON' ? (
+    <EffectiveReaderSettingsContext.Provider value={effective}>
+      <div className="fixed inset-0 overflow-hidden select-none" style={{ background: READER_BACKGROUNDS[background] }}>
+        {direction === 'WEBTOON' ? (
         <ContinuousReader
           pages={pages}
           page={page}
@@ -565,7 +571,8 @@ function Reader({ bookId }: { bookId: string }) {
         onGoToPage={goTo}
       />
 
-      <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
-    </div>
+        <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      </div>
+    </EffectiveReaderSettingsContext.Provider>
   )
 }

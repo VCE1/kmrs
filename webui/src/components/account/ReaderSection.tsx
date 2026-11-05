@@ -11,6 +11,7 @@ import type { PagedReaderLayout } from '@/lib/utils/spreads'
 import { readingDirectionLabel } from '@/lib/utils/format'
 import { cn } from '@/lib/utils/cn'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { Switch } from '@/components/ui/Switch'
 import { Section, SettingRow } from './Section'
 
 const directions: ReadingDirection[] = ['LEFT_TO_RIGHT', 'RIGHT_TO_LEFT', 'VERTICAL', 'WEBTOON']
@@ -21,6 +22,7 @@ export function ReaderSection() {
   const readingDirection = useReaderSettings((s) => s.readingDirection)
   const scale = useReaderSettings((s) => s.scale)
   const pageLayout = useReaderSettings((s) => s.pageLayout)
+  const splitWide = useReaderSettings((s) => s.splitWide)
   const background = useReaderSettings((s) => s.background)
   const update = useReaderSettings((s) => s.update)
 
@@ -59,6 +61,9 @@ export function ReaderSection() {
             value={pageLayout}
             onChange={(pageLayout) => update({ pageLayout })}
           />
+        </SettingRow>
+        <SettingRow label={t('reader.splitWide')}>
+          <Switch checked={splitWide} onCheckedChange={(splitWide) => update({ splitWide })} label={t('reader.splitWide')} />
         </SettingRow>
         <SettingRow label={t('reader.background')}>
           <div className="flex items-center gap-2.5">

@@ -65,7 +65,9 @@
     "splitWide": "見開きページを分割",
     "stretchSmall": "小さいページを拡大",
     "tapZones": "タップ領域",
-    "filters": "フィルター"
+    "filters": "フィルター",
+    "customized": "このシリーズには個別の設定があります",
+    "resetOverrides": "デフォルトに戻す"
   },
   "filter": {
     "brightness": "明るさ",

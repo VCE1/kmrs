@@ -11,7 +11,8 @@ import {
 import { useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import type { BookDto, ReadingDirection } from '@/lib/api/types'
-import { usePageFilter, useReaderSettings, type ScaleType } from '@/lib/store/readerSettings'
+import { useReaderSettings, type ScaleType } from '@/lib/store/readerSettings'
+import { useEffectivePageFilter, useEffectiveSettings } from '@/components/reader/effectiveSettings'
 import { buildSpreads, isLandscape, measureWhenKnown, slotAspectRatio, type SpreadPage } from '@/lib/utils/spreads'
 import { cn } from '@/lib/utils/cn'
 import { BookTransition } from './BookTransition'
@@ -127,16 +128,14 @@ export function PagedReader({
   splitHalf,
   onSplitHalfChange,
 }: PagedReaderProps) {
-  const scale = useReaderSettings((s) => s.scale)
-  const pageLayout = useReaderSettings((s) => s.pageLayout)
-  const splitWide = useReaderSettings((s) => s.splitWide)
+  const { scale, pageLayout, splitWide } = useEffectiveSettings()
   const stretchSmall = useReaderSettings((s) => s.stretchSmall)
   const animations = useReaderSettings((s) => s.animations)
   const pageTransition = useReaderSettings((s) => s.pageTransition)
-  const swipe = useReaderSettings((s) => s.swipe)
   const tapZones = useReaderSettings((s) => s.tapZones)
+  const swipe = useReaderSettings((s) => s.swipe)
   // blank slots bypass PageImage, so they pick the page filter up here
-  const pageFilter = usePageFilter()
+  const pageFilter = useEffectivePageFilter()
   const reduceMotion = useReducedMotion()
   const { t } = useTranslation('reader')
 

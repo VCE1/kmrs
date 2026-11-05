@@ -65,7 +65,9 @@
     "splitWide": "넓은 페이지 분할",
     "stretchSmall": "작은 페이지 확대",
     "tapZones": "탭 영역",
-    "filters": "필터"
+    "filters": "필터",
+    "customized": "이 시리즈에는 별도의 설정이 있습니다",
+    "resetOverrides": "기본값으로 초기화"
   },
   "filter": {
     "brightness": "밝기",

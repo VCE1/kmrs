@@ -107,6 +107,7 @@
     "layoutSingle": "Simple",
     "layoutDouble": "Double",
     "layoutDoubleNoCover": "Double sans couverture",
+    "splitWide": "Découper les pages larges",
     "background": "Arrière-plan",
     "backgroundLabel": "Arrière-plan {{color}}",
     "backgrounds": {

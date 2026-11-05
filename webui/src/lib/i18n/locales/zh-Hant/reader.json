@@ -65,7 +65,9 @@
     "splitWide": "切割寬頁面",
     "stretchSmall": "放大小尺寸頁面",
     "tapZones": "點擊區域",
-    "filters": "濾鏡"
+    "filters": "濾鏡",
+    "customized": "本系列有自訂設定",
+    "resetOverrides": "恢復全域預設"
   },
   "filter": {
     "brightness": "亮度",

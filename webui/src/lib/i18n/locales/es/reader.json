@@ -65,7 +65,9 @@
     "splitWide": "Dividir páginas anchas",
     "stretchSmall": "Ampliar páginas pequeñas",
     "tapZones": "Zonas táctiles",
-    "filters": "Filtros"
+    "filters": "Filtros",
+    "customized": "Esta serie tiene ajustes propios",
+    "resetOverrides": "Restablecer valores predeterminados"
   },
   "filter": {
     "brightness": "Brillo",

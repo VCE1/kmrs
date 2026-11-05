@@ -65,7 +65,9 @@
     "splitWide": "Split wide pages",
     "stretchSmall": "Enlarge small pages",
     "tapZones": "Tap zones",
-    "filters": "Filters"
+    "filters": "Filters",
+    "customized": "This series has custom settings",
+    "resetOverrides": "Reset to defaults"
   },
   "filter": {
     "brightness": "Brightness",

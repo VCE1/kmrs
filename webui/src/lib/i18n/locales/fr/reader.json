@@ -65,7 +65,9 @@
     "splitWide": "Découper les pages larges",
     "stretchSmall": "Agrandir les petites pages",
     "tapZones": "Zones de toucher",
-    "filters": "Filtres"
+    "filters": "Filtres",
+    "customized": "Cette série a des réglages personnalisés",
+    "resetOverrides": "Rétablir les valeurs par défaut"
   },
   "filter": {
     "brightness": "Luminosité",

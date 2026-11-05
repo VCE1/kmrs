@@ -47,6 +47,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
 import { Chip, FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
+import { useEffectiveControls, useEffectiveSettings } from '@/components/reader/effectiveSettings'
 import { cn } from '@/lib/utils/cn'
 import { tapAction, type TapAction } from './tapZones'
 
@@ -223,21 +224,21 @@ export function SettingsPanel({
   onAlwaysFullscreenChange,
   onClose,
 }: SettingsPanelProps) {
-  const scale = useReaderSettings((s) => s.scale)
-  const pageLayout = useReaderSettings((s) => s.pageLayout)
-  const splitWide = useReaderSettings((s) => s.splitWide)
-  const continuousScale = useReaderSettings((s) => s.continuousScale)
-  const continuousPadding = useReaderSettings((s) => s.continuousPadding)
-  const continuousMargin = useReaderSettings((s) => s.continuousMargin)
-  const swipe = useReaderSettings((s) => s.swipe)
+  // content-dependent settings resolve through the effective context and write
+  // back as per-series overrides; preferences stay global and write the store directly
+  const { scale, pageLayout, splitWide, filters } = useEffectiveSettings()
+  const { overriddenKeys, update, resetOverrides } = useEffectiveControls()
   const tapZones = useReaderSettings((s) => s.tapZones)
   const stretchSmall = useReaderSettings((s) => s.stretchSmall)
   const animations = useReaderSettings((s) => s.animations)
   const pageTransition = useReaderSettings((s) => s.pageTransition)
-  const alwaysFullscreen = useReaderSettings((s) => s.alwaysFullscreen)
   const background = useReaderSettings((s) => s.background)
-  const filters = useReaderSettings((s) => s.filters)
-  const update = useReaderSettings((s) => s.update)
+  const continuousScale = useReaderSettings((s) => s.continuousScale)
+  const continuousPadding = useReaderSettings((s) => s.continuousPadding)
+  const continuousMargin = useReaderSettings((s) => s.continuousMargin)
+  const swipe = useReaderSettings((s) => s.swipe)
+  const alwaysFullscreen = useReaderSettings((s) => s.alwaysFullscreen)
+  const updateGlobal = useReaderSettings((s) => s.update)
   const reduceMotion = useReducedMotion()
   const closeRef = useRef<HTMLButtonElement>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -331,6 +332,14 @@ export function SettingsPanel({
                 </div>
 
                 <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
+              {overriddenKeys.length > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-raised px-3 py-2">
+                  <span className="text-[13px] text-ink-2">{t('panel.customized')}</span>
+                  <Button size="sm" onClick={resetOverrides}>
+                    {t('panel.resetOverrides')}
+                  </Button>
+                </div>
+              )}
               <Section title={t('panel.direction')}>
                 <OptionTiles options={directionOptions} value={direction} onChange={onDirectionChange} perRow={4} />
               </Section>
@@ -340,7 +349,7 @@ export function SettingsPanel({
                   <OptionTiles
                     options={continuousScaleOptions}
                     value={continuousScale}
-                    onChange={(v) => update({ continuousScale: v })}
+                    onChange={(v) => updateGlobal({ continuousScale: v })}
                     perRow={2}
                   />
                 ) : (
@@ -358,7 +367,7 @@ export function SettingsPanel({
                         <Row label={t('panel.stretchSmall')}>
                           <Switch
                             checked={stretchSmall}
-                            onCheckedChange={(v) => update({ stretchSmall: v })}
+                            onCheckedChange={(v) => updateGlobal({ stretchSmall: v })}
                             label={t('panel.stretchSmall')}
                           />
                         </Row>
@@ -399,7 +408,7 @@ export function SettingsPanel({
                       <OptionTiles
                         options={tapZoneOptions}
                         value={tapZones}
-                        onChange={(v) => update({ tapZones: v })}
+                        onChange={(v) => updateGlobal({ tapZones: v })}
                         perRow={3}
                       />
                       <div className="flex justify-center gap-4 text-[11px] text-ink-2">
@@ -428,7 +437,7 @@ export function SettingsPanel({
                           aria-label={t(BACKGROUND_LABEL_KEYS[value])}
                           aria-pressed={background === value}
                           title={t(BACKGROUND_LABEL_KEYS[value])}
-                          onClick={() => update({ background: value })}
+                          onClick={() => updateGlobal({ background: value })}
                           className={cn(
                             'size-6 cursor-pointer rounded-full text-ink-2',
                             value !== 'AUTO' && 'border border-line-strong',
@@ -442,12 +451,12 @@ export function SettingsPanel({
                     </div>
                   </Row>
                   <Row label={t('panel.swipe')}>
-                    <Switch checked={swipe} onCheckedChange={(v) => update({ swipe: v })} label={t('panel.swipe')} />
+                    <Switch checked={swipe} onCheckedChange={(v) => updateGlobal({ swipe: v })} label={t('panel.swipe')} />
                   </Row>
                   <Row label={t('panel.animations')}>
                     <Switch
                       checked={animations}
-                      onCheckedChange={(v) => update({ animations: v })}
+                      onCheckedChange={(v) => updateGlobal({ animations: v })}
                       label={t('panel.animations')}
                     />
                   </Row>
@@ -458,7 +467,7 @@ export function SettingsPanel({
                           <SegmentedControl
                             options={transitionOptions}
                             value={pageTransition}
-                            onChange={(v) => update({ pageTransition: v })}
+                            onChange={(v) => updateGlobal({ pageTransition: v })}
                             size="sm"
                           />
                         </Row>
@@ -588,7 +597,7 @@ export function SettingsPanel({
                         <SliderField label={t('panel.sidePadding')} value={`${continuousPadding}%`}>
                           <Slider
                             value={continuousPadding}
-                            onValueChange={(v) => update({ continuousPadding: v })}
+                            onValueChange={(v) => updateGlobal({ continuousPadding: v })}
                             min={0}
                             max={40}
                             step={5}
@@ -598,7 +607,7 @@ export function SettingsPanel({
                         <SliderField label={t('panel.pageGap')} value={`${continuousMargin}px`}>
                           <Slider
                             value={continuousMargin}
-                            onValueChange={(v) => update({ continuousMargin: v })}
+                            onValueChange={(v) => updateGlobal({ continuousMargin: v })}
                             min={0}
                             max={15}
                             step={5}

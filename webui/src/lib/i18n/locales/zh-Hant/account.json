@@ -105,6 +105,7 @@
     "layoutSingle": "單頁",
     "layoutDouble": "雙頁",
     "layoutDoubleNoCover": "雙頁（不含封面）",
+    "splitWide": "切割寬頁面",
     "background": "背景",
     "backgroundLabel": "背景 {{color}}",
     "backgrounds": {

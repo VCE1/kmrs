@@ -65,7 +65,9 @@
     "splitWide": "切割宽页面",
     "stretchSmall": "放大小尺寸页面",
     "tapZones": "点击区域",
-    "filters": "滤镜"
+    "filters": "滤镜",
+    "customized": "本系列有自定义设置",
+    "resetOverrides": "恢复全局默认"
   },
   "filter": {
     "brightness": "亮度",

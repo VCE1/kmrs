@@ -107,6 +107,7 @@
     "layoutSingle": "Individual",
     "layoutDouble": "Doble",
     "layoutDoubleNoCover": "Doble sin portada",
+    "splitWide": "Dividir páginas anchas",
     "background": "Fondo",
     "backgroundLabel": "Fondo {{color}}",
     "backgrounds": {
