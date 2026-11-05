@@ -69,9 +69,10 @@ pub fn startup_failure_exits_cleanly() -> bool {
 
 /// The login item's copy of a server that is already running. Turning Open at
 /// Login on starts the login item right away while the server that turned it on
-/// keeps running, so this copy finds the data directory in use. Both signals
-/// are needed: the index reports any failure to take its lock as busy, even on
-/// a filesystem without file locks.
+/// keeps running, so this copy finds the data directory in use. The busy index
+/// alone is not enough: it reports any failure to take its lock as busy, even
+/// on a filesystem without file locks, so another running instance of the app
+/// must confirm it.
 pub fn duplicate_of_running_server(error: &anyhow::Error) -> bool {
     launched_by_login_agent()
         && error.chain().any(|cause| {
