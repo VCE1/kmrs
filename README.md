@@ -34,6 +34,8 @@ docker run -d \
 
 The kmweb React web UI (built from [`webui/`](webui/) in this repo) is embedded in the binary and served at `/` out of the box — nothing to configure. [Releases](https://github.com/kmworks/kmrs/releases/latest) provide a signed KMServer app for Apple silicon, a per-user Windows installer, and prebuilt binaries for Linux and Windows; API-only clients like [KMReader](https://github.com/kmworks/kmreader), KOReader, or Kobo work too.
 
+Desktop downloads: [macOS (Apple silicon)](https://github.com/kmworks/kmrs/releases/latest/download/KMServer_aarch64.dmg) · [Windows (x64)](https://github.com/kmworks/kmrs/releases/latest/download/KMServer_x64-setup.exe)
+
 ## Documentation
 
 Full documentation lives at **[kmworks.date/server](https://kmworks.date/server/)**:
