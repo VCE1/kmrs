@@ -773,8 +773,7 @@ mod tests {
 
     #[test]
     fn sessions_db_defaults_file_and_env() {
-        // persisted sessions are the default on every install (upstream turns them
-        // on only in its Docker image); KOMGA_JDBCSESSIONENABLED=false opts out
+        // persisted sessions are the default; KOMGA_JDBCSESSIONENABLED=false opts out
         let config = ServerConfig::resolve(None, &Cli::default(), &[]).unwrap();
         assert!(config.jdbc_session_enabled);
         assert_eq!(

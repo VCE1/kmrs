@@ -241,9 +241,9 @@ impl JavaConfig {
             file.sessions_db = komga
                 .sessions_db
                 .map(|d| d.into_file(&subst_base, "komga.sessions-db"));
-            if komga.jdbc_session_enabled.unwrap_or(false) {
+            if let Some(enabled) = komga.jdbc_session_enabled {
                 let server = file.server.get_or_insert_with(FileServer::default);
-                server.jdbc_session_enabled = Some(true);
+                server.jdbc_session_enabled = Some(enabled);
             }
             if let Some(lucene) = komga.lucene {
                 if lucene.commit_delay.is_some() {
@@ -583,6 +583,15 @@ komga:
             Path::new("/data"),
         );
         assert_eq!(file.database.unwrap().journal_mode, None);
+    }
+
+    #[test]
+    fn jdbc_session_opt_out_is_carried_over() {
+        let file = migrate_yaml(
+            "komga:\n  jdbc-session-enabled: false\n",
+            Path::new("/data"),
+        );
+        assert_eq!(file.server.unwrap().jdbc_session_enabled, Some(false));
     }
 
     #[test]

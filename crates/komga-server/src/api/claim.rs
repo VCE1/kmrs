@@ -12,6 +12,11 @@ use komga_core::time_codec::now_utc;
 use komga_db::dao::user::UserDao;
 use serde::Serialize;
 use std::collections::BTreeSet;
+use tokio::sync::Mutex;
+
+/// Serializes the count-then-insert below so concurrent claims of an unclaimed
+/// server cannot each create an admin.
+static CLAIM_LOCK: Mutex<()> = Mutex::const_new(());
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +68,7 @@ async fn claim(
         return Err(ApiError::Violations(violations));
     }
 
+    let _guard = CLAIM_LOCK.lock().await;
     let user_dao = UserDao::new(state.db.clone());
     if user_dao.count()? > 0 {
         return Err(ApiError::bad_request(
@@ -102,4 +108,70 @@ pub(crate) fn is_valid_email(email: &str) -> bool {
         return false;
     };
     !local.is_empty() && rest.contains('.') && !rest.starts_with('.') && !rest.ends_with('.')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::test_kmrs_db;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use komga_db::pool::Database;
+    use komga_db::{Migrator, Placeholders};
+    use tower::ServiceExt;
+
+    fn test_state() -> AppState {
+        let db = Database::open_in_memory(true).unwrap();
+        let migrations = komga_db::main_migrations();
+        Migrator::new(&migrations, Placeholders::default())
+            .migrate(&db.rw().unwrap())
+            .unwrap();
+        let tasks_db = Database::open_in_memory(false).unwrap();
+        let tasks_migrations = komga_db::tasks_migrations();
+        Migrator::new(&tasks_migrations, Placeholders::default())
+            .migrate(&tasks_db.rw().unwrap())
+            .unwrap();
+        let config = crate::config::ServerConfig::from_env();
+        crate::state::test_app_state(config, db, tasks_db, test_kmrs_db()).0
+    }
+
+    fn claim_request(email: &str) -> Request<Body> {
+        Request::post("/api/v1/claim")
+            .header("X-Komga-Email", email)
+            .header("X-Komga-Password", "pass")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_claims_create_a_single_user() {
+        let state = test_state();
+        let app = router().with_state(state.clone());
+
+        let handles: Vec<_> = (0..4)
+            .map(|i| {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    app.oneshot(claim_request(&format!("user{i}@example.org")))
+                        .await
+                        .unwrap()
+                        .status()
+                })
+            })
+            .collect();
+        let mut statuses = Vec::new();
+        for handle in handles {
+            statuses.push(handle.await.unwrap());
+        }
+
+        assert_eq!(
+            statuses.iter().filter(|s| **s == StatusCode::OK).count(),
+            1,
+            "{statuses:?}"
+        );
+        assert!(statuses
+            .iter()
+            .all(|s| *s == StatusCode::OK || *s == StatusCode::BAD_REQUEST));
+        assert_eq!(UserDao::new(state.db.clone()).count().unwrap(), 1);
+    }
 }
