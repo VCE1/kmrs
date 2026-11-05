@@ -6,3 +6,4 @@
 *.sqlite-shm
 /.env.local
 .DS_Store
+/.agents/tasks/
