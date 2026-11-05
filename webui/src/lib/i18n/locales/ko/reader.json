@@ -64,7 +64,32 @@
     "pageGap": "페이지 간격",
     "splitWide": "넓은 페이지 분할",
     "stretchSmall": "작은 페이지 확대",
-    "tapZones": "탭 영역"
+    "tapZones": "탭 영역",
+    "filters": "필터"
+  },
+  "filter": {
+    "brightness": "밝기",
+    "contrast": "대비",
+    "saturate": "채도",
+    "hue": "색조 회전",
+    "sepia": "세피아",
+    "grayscale": "그레이스케일",
+    "invert": "색상 반전",
+    "tint": "컬러 틴트",
+    "red": "빨강",
+    "green": "초록",
+    "blue": "파랑",
+    "alpha": "불투명도",
+    "blendMode": "혼합 모드",
+    "blend": {
+      "normal": "일반",
+      "multiply": "곱하기",
+      "screen": "스크린",
+      "overlay": "오버레이",
+      "darken": "어둡게",
+      "lighten": "밝게"
+    },
+    "reset": "필터 초기화"
   },
   "scale": {
     "screen": "화면에 맞춤",

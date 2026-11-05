@@ -2,7 +2,7 @@ import { CircleNotch, ImageBroken } from '@phosphor-icons/react'
 import { useEffect, useRef, useState, type CSSProperties, type HTMLAttributes } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/Button'
-import { useReaderBackground } from '@/lib/store/readerSettings'
+import { usePageFilter, useReaderBackground } from '@/lib/store/readerSettings'
 import { cn } from '@/lib/utils/cn'
 import { imageErrored, imageRetried, imageStateFor, retrySrc, type PageImageState } from './pageRetry'
 
@@ -49,6 +49,7 @@ export function PageImage({
   const [state, setState] = useState<PageImageState | null>(null)
   const { attempt, failed } = imageStateFor(state, src)
   const background = useReaderBackground()
+  const filter = usePageFilter()
   const hintColor = background === 'WHITE' ? 'text-black/50' : 'text-white/60'
   const imgRef = useRef<HTMLImageElement | null>(null)
   useEffect(() => {
@@ -96,7 +97,7 @@ export function PageImage({
             alt={alt}
             draggable={false}
             className={imgClassName ?? 'block h-full w-full object-contain'}
-            style={imgStyle}
+            style={{ filter, ...imgStyle }}
             ref={(el) => {
               imgRef.current = el
               if (el?.complete && el.naturalWidth > 0) setLoaded(true)

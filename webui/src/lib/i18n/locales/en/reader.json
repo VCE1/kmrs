@@ -64,7 +64,32 @@
     "pageGap": "Page gap",
     "splitWide": "Split wide pages",
     "stretchSmall": "Enlarge small pages",
-    "tapZones": "Tap zones"
+    "tapZones": "Tap zones",
+    "filters": "Filters"
+  },
+  "filter": {
+    "brightness": "Brightness",
+    "contrast": "Contrast",
+    "saturate": "Saturation",
+    "hue": "Hue rotation",
+    "sepia": "Sepia",
+    "grayscale": "Grayscale",
+    "invert": "Invert colors",
+    "tint": "Color tint",
+    "red": "Red",
+    "green": "Green",
+    "blue": "Blue",
+    "alpha": "Opacity",
+    "blendMode": "Blend mode",
+    "blend": {
+      "normal": "Normal",
+      "multiply": "Multiply",
+      "screen": "Screen",
+      "overlay": "Overlay",
+      "darken": "Darken",
+      "lighten": "Lighten"
+    },
+    "reset": "Reset filters"
   },
   "scale": {
     "screen": "Fit screen",

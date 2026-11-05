@@ -64,7 +64,32 @@
     "pageGap": "页面间距",
     "splitWide": "切割宽页面",
     "stretchSmall": "放大小尺寸页面",
-    "tapZones": "点击区域"
+    "tapZones": "点击区域",
+    "filters": "滤镜"
+  },
+  "filter": {
+    "brightness": "亮度",
+    "contrast": "对比度",
+    "saturate": "饱和度",
+    "hue": "色相旋转",
+    "sepia": "褐色调",
+    "grayscale": "灰度",
+    "invert": "反转颜色",
+    "tint": "着色",
+    "red": "红",
+    "green": "绿",
+    "blue": "蓝",
+    "alpha": "不透明度",
+    "blendMode": "混合模式",
+    "blend": {
+      "normal": "正常",
+      "multiply": "正片叠底",
+      "screen": "滤色",
+      "overlay": "叠加",
+      "darken": "变暗",
+      "lighten": "变亮"
+    },
+    "reset": "重置滤镜"
   },
   "scale": {
     "screen": "适应屏幕",

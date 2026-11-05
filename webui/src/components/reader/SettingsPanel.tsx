@@ -28,12 +28,25 @@ import {
   type ScaleType,
   type TapZoneLayout,
 } from '@/lib/store/readerSettings'
+import {
+  DEFAULT_FILTERS,
+  FILTER_BLEND_MODES,
+  FILTER_LIMITS,
+  hasActiveFilters,
+  TINT_ALPHA_LIMIT,
+  TINT_CHANNEL_LIMIT,
+  type FilterLevel,
+  type FilterLimit,
+  type ReaderFilters,
+  type TintFilter,
+} from '@/lib/utils/readerFilters'
 import type { PagedReaderLayout } from '@/lib/utils/spreads'
 import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Slider } from '@/components/ui/Slider'
 import { Switch } from '@/components/ui/Switch'
-import { FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
+import { Chip, FieldGroup, OptionTiles, Row, RowGroup, Section, SliderField } from '@/components/reader/panel'
 import { cn } from '@/lib/utils/cn'
 import { tapAction, type TapAction } from './tapZones'
 
@@ -153,6 +166,48 @@ const PAGE_TRANSITION_LABEL_KEYS: Record<PageTransition, string> = {
   FADE: 'pageTransition.fade',
 }
 
+/** One numeric filter (brightness etc.): a switch, with its slider expanding underneath while enabled. */
+function FilterLevelField({
+  label,
+  limit,
+  level,
+  format,
+  onChange,
+}: {
+  label: string
+  limit: FilterLimit
+  level: FilterLevel
+  format: (value: number) => string
+  onChange: (level: FilterLevel) => void
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex min-h-6 items-center justify-between text-[13px] text-ink">
+        <span>{label}</span>
+        <Switch checked={level.enabled} onCheckedChange={(enabled) => onChange({ ...level, enabled })} label={label} />
+      </div>
+      <AnimatePresence initial={false}>
+        {level.enabled && (
+          <PanelSection>
+            <div className="flex items-center gap-3">
+              <Slider
+                className="flex-1"
+                value={level.value}
+                onValueChange={(value) => onChange({ ...level, value })}
+                min={limit.min}
+                max={limit.max}
+                step={limit.step}
+                label={label}
+              />
+              <span className="w-10 text-right font-mono text-xs text-ink-3">{format(level.value)}</span>
+            </div>
+          </PanelSection>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 interface SettingsPanelProps {
   open: boolean
   direction: ReadingDirection
@@ -181,6 +236,7 @@ export function SettingsPanel({
   const pageTransition = useReaderSettings((s) => s.pageTransition)
   const alwaysFullscreen = useReaderSettings((s) => s.alwaysFullscreen)
   const background = useReaderSettings((s) => s.background)
+  const filters = useReaderSettings((s) => s.filters)
   const update = useReaderSettings((s) => s.update)
   const reduceMotion = useReducedMotion()
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -188,6 +244,9 @@ export function SettingsPanel({
   const { t } = useTranslation('reader')
 
   const webtoon = direction === 'WEBTOON'
+  const updateFilters = (patch: Partial<ReaderFilters>) => update({ filters: { ...filters, ...patch } })
+  const updateTint = (patch: Partial<TintFilter>) =>
+    update({ filters: { ...filters, tint: { ...filters.tint, ...patch } } })
   useEffect(
     () => () => {
       ;(returnFocusRef.current ?? document.querySelector<HTMLElement>('[aria-keyshortcuts="s"]'))?.focus()
@@ -414,6 +473,111 @@ export function SettingsPanel({
                     />
                   </Row>
                 </RowGroup>
+              </Section>
+
+              <Section title={t('panel.filters')}>
+                <FieldGroup>
+                  {(Object.keys(FILTER_LIMITS) as Array<keyof typeof FILTER_LIMITS>).map((key) => (
+                    <FilterLevelField
+                      key={key}
+                      label={t(`filter.${key}`)}
+                      limit={FILTER_LIMITS[key]}
+                      level={filters[key]}
+                      format={key === 'hue' ? (v) => `${v}°` : (v) => `${v}%`}
+                      onChange={(level) => updateFilters({ [key]: level })}
+                    />
+                  ))}
+                </FieldGroup>
+                <RowGroup>
+                  <Row label={t('filter.sepia')}>
+                    <Switch
+                      checked={filters.sepia}
+                      onCheckedChange={(sepia) => updateFilters({ sepia })}
+                      label={t('filter.sepia')}
+                    />
+                  </Row>
+                  <Row label={t('filter.grayscale')}>
+                    <Switch
+                      checked={filters.grayscale}
+                      onCheckedChange={(grayscale) => updateFilters({ grayscale })}
+                      label={t('filter.grayscale')}
+                    />
+                  </Row>
+                  <Row label={t('filter.invert')}>
+                    <Switch
+                      checked={filters.invert}
+                      onCheckedChange={(invert) => updateFilters({ invert })}
+                      label={t('filter.invert')}
+                    />
+                  </Row>
+                </RowGroup>
+                <FieldGroup>
+                  <div className="flex min-h-6 items-center justify-between text-[13px] text-ink">
+                    <span>{t('filter.tint')}</span>
+                    <Switch
+                      checked={filters.tint.enabled}
+                      onCheckedChange={(enabled) => updateTint({ enabled })}
+                      label={t('filter.tint')}
+                    />
+                  </div>
+                  <AnimatePresence initial={false}>
+                    {filters.tint.enabled && (
+                      <PanelSection>
+                        <div className="space-y-4">
+                          {(['red', 'green', 'blue'] as const).map((channel) => (
+                            <SliderField
+                              key={channel}
+                              label={t(`filter.${channel}`)}
+                              value={String(filters.tint[channel])}
+                            >
+                              <Slider
+                                value={filters.tint[channel]}
+                                onValueChange={(v) => updateTint({ [channel]: v })}
+                                min={TINT_CHANNEL_LIMIT.min}
+                                max={TINT_CHANNEL_LIMIT.max}
+                                step={TINT_CHANNEL_LIMIT.step}
+                                label={t(`filter.${channel}`)}
+                              />
+                            </SliderField>
+                          ))}
+                          <SliderField label={t('filter.alpha')} value={`${filters.tint.alpha}%`}>
+                            <Slider
+                              value={filters.tint.alpha}
+                              onValueChange={(alpha) => updateTint({ alpha })}
+                              min={TINT_ALPHA_LIMIT.min}
+                              max={TINT_ALPHA_LIMIT.max}
+                              step={TINT_ALPHA_LIMIT.step}
+                              label={t('filter.alpha')}
+                            />
+                          </SliderField>
+                          <div className="space-y-1.5">
+                            <span className="text-[13px] text-ink">{t('filter.blendMode')}</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {FILTER_BLEND_MODES.map((blendMode) => (
+                                <Chip
+                                  key={blendMode}
+                                  selected={filters.tint.blendMode === blendMode}
+                                  onClick={() => updateTint({ blendMode })}
+                                >
+                                  {t(`filter.blend.${blendMode}`)}
+                                </Chip>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </PanelSection>
+                    )}
+                  </AnimatePresence>
+                </FieldGroup>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    disabled={!hasActiveFilters(filters)}
+                    onClick={() => update({ filters: DEFAULT_FILTERS })}
+                  >
+                    {t('filter.reset')}
+                  </Button>
+                </div>
               </Section>
 
               <AnimatePresence initial={false}>

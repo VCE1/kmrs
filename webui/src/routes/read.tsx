@@ -19,6 +19,7 @@ import {
   type ScaleType,
 } from '@/lib/store/readerSettings'
 import { needsConvert, supportedImageFormats } from '@/lib/utils/imageSupport'
+import { buildTintStyle } from '@/lib/utils/readerFilters'
 import { showToast } from '@/lib/store/toast'
 import { urls } from '@/lib/utils/urls'
 import type { PageDims, PagedReaderLayout, SpreadPage } from '@/lib/utils/spreads'
@@ -100,6 +101,8 @@ function Reader({ bookId }: { bookId: string }) {
 
   const settingsDirection = useReaderSettings((s) => s.readingDirection)
   const background = useReaderBackground()
+  const filters = useReaderSettings((s) => s.filters)
+  const tintStyle = useMemo(() => buildTintStyle(filters), [filters])
   const pageLayout = useReaderSettings((s) => s.pageLayout)
   const splitWide = useReaderSettings((s) => s.splitWide)
   const user = useAuthStore((s) => s.user)
@@ -512,6 +515,9 @@ function Reader({ bookId }: { bookId: string }) {
           onSplitHalfChange={setSplitHalf}
         />
       )}
+
+      {/* tint sits above the pages but below the z-20 chrome so the toolbars stay undimmed */}
+      {tintStyle && <div aria-hidden className="pointer-events-none fixed inset-0 z-10" style={tintStyle} />}
 
       <ReaderChrome
         visible={chromeVisible}

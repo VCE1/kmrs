@@ -64,7 +64,32 @@
     "pageGap": "Separación entre páginas",
     "splitWide": "Dividir páginas anchas",
     "stretchSmall": "Ampliar páginas pequeñas",
-    "tapZones": "Zonas táctiles"
+    "tapZones": "Zonas táctiles",
+    "filters": "Filtros"
+  },
+  "filter": {
+    "brightness": "Brillo",
+    "contrast": "Contraste",
+    "saturate": "Saturación",
+    "hue": "Rotación de tono",
+    "sepia": "Sepia",
+    "grayscale": "Escala de grises",
+    "invert": "Invertir colores",
+    "tint": "Tinte de color",
+    "red": "Rojo",
+    "green": "Verde",
+    "blue": "Azul",
+    "alpha": "Opacidad",
+    "blendMode": "Modo de fusión",
+    "blend": {
+      "normal": "Normal",
+      "multiply": "Multiplicar",
+      "screen": "Pantalla",
+      "overlay": "Superponer",
+      "darken": "Oscurecer",
+      "lighten": "Aclarar"
+    },
+    "reset": "Restablecer filtros"
   },
   "scale": {
     "screen": "Ajustar a pantalla",

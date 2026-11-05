@@ -11,7 +11,7 @@ import {
 import { useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 import type { BookDto, ReadingDirection } from '@/lib/api/types'
-import { useReaderSettings, type ScaleType } from '@/lib/store/readerSettings'
+import { usePageFilter, useReaderSettings, type ScaleType } from '@/lib/store/readerSettings'
 import { buildSpreads, isLandscape, measureWhenKnown, slotAspectRatio, type SpreadPage } from '@/lib/utils/spreads'
 import { cn } from '@/lib/utils/cn'
 import { BookTransition } from './BookTransition'
@@ -135,6 +135,8 @@ export function PagedReader({
   const pageTransition = useReaderSettings((s) => s.pageTransition)
   const swipe = useReaderSettings((s) => s.swipe)
   const tapZones = useReaderSettings((s) => s.tapZones)
+  // blank slots bypass PageImage, so they pick the page filter up here
+  const pageFilter = usePageFilter()
   const reduceMotion = useReducedMotion()
   const { t } = useTranslation('reader')
 
@@ -433,7 +435,14 @@ export function PagedReader({
                     if (!near && !p.blank) return <div key={p.number} aria-hidden className={cls} style={dim} />
                     if (p.blank)
                       return (
-                        <img key={`blank-${j}`} src={p.url} alt="" draggable={false} className={cls} style={dim} />
+                        <img
+                          key={`blank-${j}`}
+                          src={p.url}
+                          alt=""
+                          draggable={false}
+                          className={cls}
+                          style={{ ...dim, filter: pageFilter }}
+                        />
                       )
                     return (
                       <PageImage

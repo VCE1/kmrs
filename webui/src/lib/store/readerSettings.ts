@@ -1,8 +1,9 @@
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ReadingDirection } from '@/lib/api/types'
 import { useUiStore } from '@/lib/store/ui'
+import { buildFilterString, DEFAULT_FILTERS, type ReaderFilters } from '@/lib/utils/readerFilters'
 import type { PagedReaderLayout } from '@/lib/utils/spreads'
 
 export type ScaleType = 'SCREEN' | 'WIDTH' | 'WIDTH_SHRINK_ONLY' | 'HEIGHT' | 'ORIGINAL'
@@ -41,6 +42,8 @@ interface ReaderSettings {
   epubFontSize: number
   /** null keeps the publisher default */
   epubLineHeight: number | null
+  /** image filters for page scans; the EPUB reader has its own theme instead */
+  filters: ReaderFilters
 }
 
 interface ReaderSettingsState extends ReaderSettings {
@@ -75,6 +78,7 @@ export const useReaderSettings = create<ReaderSettingsState>()(
       epubFontFamily: 'Original',
       epubFontSize: 1,
       epubLineHeight: null,
+      filters: DEFAULT_FILTERS,
       update: (patch) => set(patch),
     }),
     { name: 'kmweb.reader' },
@@ -96,4 +100,10 @@ export function useReaderBackground(): ResolvedReaderBackground {
   )
   if (background !== 'AUTO') return background
   return (theme === 'system' ? prefersLight : theme === 'light') ? 'WHITE' : 'BLACK'
+}
+
+/** CSS `filter` value applied to page images; recomputed only when the filters object changes. */
+export function usePageFilter(): string {
+  const filters = useReaderSettings((s) => s.filters)
+  return useMemo(() => buildFilterString(filters), [filters])
 }

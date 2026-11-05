@@ -64,7 +64,32 @@
     "pageGap": "頁面間距",
     "splitWide": "切割寬頁面",
     "stretchSmall": "放大小尺寸頁面",
-    "tapZones": "點擊區域"
+    "tapZones": "點擊區域",
+    "filters": "濾鏡"
+  },
+  "filter": {
+    "brightness": "亮度",
+    "contrast": "對比度",
+    "saturate": "飽和度",
+    "hue": "色相旋轉",
+    "sepia": "褐色調",
+    "grayscale": "灰階",
+    "invert": "反轉顏色",
+    "tint": "著色",
+    "red": "紅",
+    "green": "綠",
+    "blue": "藍",
+    "alpha": "不透明度",
+    "blendMode": "混合模式",
+    "blend": {
+      "normal": "正常",
+      "multiply": "正片疊底",
+      "screen": "濾色",
+      "overlay": "疊加",
+      "darken": "變暗",
+      "lighten": "變亮"
+    },
+    "reset": "重設濾鏡"
   },
   "scale": {
     "screen": "符合螢幕",

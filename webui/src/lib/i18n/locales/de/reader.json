@@ -64,7 +64,32 @@
     "pageGap": "Seitenabstand",
     "splitWide": "Breite Seiten teilen",
     "stretchSmall": "Kleine Seiten vergrößern",
-    "tapZones": "Tippbereiche"
+    "tapZones": "Tippbereiche",
+    "filters": "Filter"
+  },
+  "filter": {
+    "brightness": "Helligkeit",
+    "contrast": "Kontrast",
+    "saturate": "Sättigung",
+    "hue": "Farbtondrehung",
+    "sepia": "Sepia",
+    "grayscale": "Graustufen",
+    "invert": "Farben invertieren",
+    "tint": "Farbtönung",
+    "red": "Rot",
+    "green": "Grün",
+    "blue": "Blau",
+    "alpha": "Deckkraft",
+    "blendMode": "Mischmodus",
+    "blend": {
+      "normal": "Normal",
+      "multiply": "Multiplizieren",
+      "screen": "Bildschirm",
+      "overlay": "Überlagern",
+      "darken": "Abdunkeln",
+      "lighten": "Aufhellen"
+    },
+    "reset": "Filter zurücksetzen"
   },
   "scale": {
     "screen": "An Bildschirm anpassen",

@@ -64,7 +64,32 @@
     "pageGap": "ページ間隔",
     "splitWide": "見開きページを分割",
     "stretchSmall": "小さいページを拡大",
-    "tapZones": "タップ領域"
+    "tapZones": "タップ領域",
+    "filters": "フィルター"
+  },
+  "filter": {
+    "brightness": "明るさ",
+    "contrast": "コントラスト",
+    "saturate": "彩度",
+    "hue": "色相回転",
+    "sepia": "セピア",
+    "grayscale": "グレースケール",
+    "invert": "色を反転",
+    "tint": "カラーティント",
+    "red": "赤",
+    "green": "緑",
+    "blue": "青",
+    "alpha": "不透明度",
+    "blendMode": "ブレンドモード",
+    "blend": {
+      "normal": "通常",
+      "multiply": "乗算",
+      "screen": "スクリーン",
+      "overlay": "オーバーレイ",
+      "darken": "暗く",
+      "lighten": "明るく"
+    },
+    "reset": "フィルターをリセット"
   },
   "scale": {
     "screen": "画面に合わせる",
