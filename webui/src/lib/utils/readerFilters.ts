@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react'
-
 export type FilterBlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten'
 
 export const FILTER_BLEND_MODES: readonly FilterBlendMode[] = [
@@ -71,7 +69,14 @@ export const DEFAULT_FILTERS: ReaderFilters = {
   },
 }
 
-/** CSS `filter` value for page images; the tint is excluded because it renders as a blend overlay. */
+/** id of the SVG filter that paints the color tint; the reader route renders its definition */
+export const TINT_FILTER_ID = 'kmreader-tint'
+
+/**
+ * CSS `filter` value for page images. CSS has no tint-with-blend-mode filter function,
+ * so the tint joins the chain as a reference to an SVG filter; it runs last, on top of
+ * the other adjustments, and only touches the image's own pixels.
+ */
 export function buildFilterString(filters: ReaderFilters): string {
   const parts: string[] = []
   if (filters.brightness.enabled) parts.push(`brightness(${filters.brightness.value / 100})`)
@@ -81,19 +86,26 @@ export function buildFilterString(filters: ReaderFilters): string {
   if (filters.invert) parts.push('invert(1)')
   if (filters.sepia) parts.push('sepia(1)')
   if (filters.grayscale) parts.push('grayscale(1)')
+  if (filters.tint.enabled) parts.push(`url(#${TINT_FILTER_ID})`)
   return parts.join(' ')
 }
 
 /**
- * CSS filter has no tint-with-blend-mode primitive, so the tint paints as a fixed
- * overlay div covering the reader viewport instead of joining the filter string.
+ * Fill persisted filters up to the current shape: zustand's persist merge is shallow,
+ * so fields added to the nested filter objects later would otherwise stay undefined.
  */
-export function buildTintStyle(filters: ReaderFilters): Pick<CSSProperties, 'background' | 'mixBlendMode'> | null {
-  const { tint } = filters
-  if (!tint.enabled) return null
+export function normalizeFilters(persisted: unknown): ReaderFilters {
+  const f = (persisted ?? {}) as Partial<{ [K in keyof ReaderFilters]: Partial<ReaderFilters[K]> }>
+  const level = (key: keyof typeof FILTER_LIMITS): FilterLevel => ({ ...DEFAULT_FILTERS[key], ...f[key] })
   return {
-    background: `rgba(${tint.red}, ${tint.green}, ${tint.blue}, ${tint.alpha / 100})`,
-    mixBlendMode: tint.blendMode,
+    brightness: level('brightness'),
+    contrast: level('contrast'),
+    saturate: level('saturate'),
+    hue: level('hue'),
+    sepia: typeof f.sepia === 'boolean' ? f.sepia : DEFAULT_FILTERS.sepia,
+    grayscale: typeof f.grayscale === 'boolean' ? f.grayscale : DEFAULT_FILTERS.grayscale,
+    invert: typeof f.invert === 'boolean' ? f.invert : DEFAULT_FILTERS.invert,
+    tint: { ...DEFAULT_FILTERS.tint, ...f.tint },
   }
 }
 

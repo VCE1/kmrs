@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ReadingDirection } from '@/lib/api/types'
 import { useUiStore } from '@/lib/store/ui'
-import { buildFilterString, DEFAULT_FILTERS, type ReaderFilters } from '@/lib/utils/readerFilters'
+import { buildFilterString, DEFAULT_FILTERS, normalizeFilters, type ReaderFilters } from '@/lib/utils/readerFilters'
 import type { PagedReaderLayout } from '@/lib/utils/spreads'
 
 export type ScaleType = 'SCREEN' | 'WIDTH' | 'WIDTH_SHRINK_ONLY' | 'HEIGHT' | 'ORIGINAL'
@@ -81,7 +81,14 @@ export const useReaderSettings = create<ReaderSettingsState>()(
       filters: DEFAULT_FILTERS,
       update: (patch) => set(patch),
     }),
-    { name: 'kmweb.reader' },
+    {
+      name: 'kmweb.reader',
+      // the default merge is shallow; deep-fill the nested filter objects
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ReaderSettings>
+        return { ...current, ...p, filters: normalizeFilters(p.filters) }
+      },
+    },
   ),
 )
 

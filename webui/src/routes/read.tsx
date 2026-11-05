@@ -19,7 +19,6 @@ import {
   type ScaleType,
 } from '@/lib/store/readerSettings'
 import { needsConvert, supportedImageFormats } from '@/lib/utils/imageSupport'
-import { buildTintStyle } from '@/lib/utils/readerFilters'
 import { showToast } from '@/lib/store/toast'
 import { urls } from '@/lib/utils/urls'
 import type { PageDims, PagedReaderLayout, SpreadPage } from '@/lib/utils/spreads'
@@ -34,6 +33,7 @@ import { EpubReader } from '@/components/reader/epub/EpubReader'
 import { PagedReader } from '@/components/reader/PagedReader'
 import { ReaderChrome, type PosterTarget } from '@/components/reader/ReaderChrome'
 import { SettingsPanel } from '@/components/reader/SettingsPanel'
+import { TintFilterDefs } from '@/components/reader/TintFilterDefs'
 import { ShortcutsHelp } from '@/components/reader/ShortcutsHelp'
 import { ThumbnailExplorer } from '@/components/reader/ThumbnailExplorer'
 import { useWindowKeys } from '@/components/reader/keys'
@@ -101,8 +101,7 @@ function Reader({ bookId }: { bookId: string }) {
 
   const settingsDirection = useReaderSettings((s) => s.readingDirection)
   const background = useReaderBackground()
-  const filters = useReaderSettings((s) => s.filters)
-  const tintStyle = useMemo(() => buildTintStyle(filters), [filters])
+  const tint = useReaderSettings((s) => s.filters.tint)
   const pageLayout = useReaderSettings((s) => s.pageLayout)
   const splitWide = useReaderSettings((s) => s.splitWide)
   const user = useAuthStore((s) => s.user)
@@ -516,8 +515,7 @@ function Reader({ bookId }: { bookId: string }) {
         />
       )}
 
-      {/* tint sits above the pages but below the z-20 chrome so the toolbars stay undimmed */}
-      {tintStyle && <div aria-hidden className="pointer-events-none fixed inset-0 z-10" style={tintStyle} />}
+      {tint.enabled && <TintFilterDefs tint={tint} />}
 
       <ReaderChrome
         visible={chromeVisible}
