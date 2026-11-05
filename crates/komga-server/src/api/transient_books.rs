@@ -277,6 +277,18 @@ mod tests {
         assert_eq!(books[0]["status"], "UNKNOWN");
     }
 
+    #[test]
+    fn empty_folder_scans_to_no_books() {
+        let state = test_state();
+        let dir = tempfile::tempdir().unwrap();
+        let scan_dir = dir.path().join("scanme");
+        std::fs::create_dir_all(&scan_dir).unwrap();
+        seed_library(&state, "file:/nonexistent-parent/");
+
+        let books = crate::service::transient_book::scan_and_persist(&state, &scan_dir).unwrap();
+        assert!(books.is_empty());
+    }
+
     #[tokio::test]
     async fn analyze_and_pages() {
         let state = test_state();

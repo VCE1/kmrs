@@ -1,5 +1,6 @@
 //! `LibraryScanScheduler.kt` + `PeriodicScannerController.kt`: periodic library scans and
-//! scan-on-startup.
+//! scan-on-startup, plus a kmrs-only minute check that lets libraries leave the unavailable
+//! state once their root is back.
 //!
 //! Each library with a non-DISABLED interval gets its own tokio interval task; rescheduling
 //! aborts the previous one. First fire happens after one full period, matching FixedRateTask's
@@ -104,7 +105,31 @@ impl ScanScheduler {
                 );
             }
         }
+        Self::start_availability_check(state);
         tokio::spawn(async {})
+    }
+
+    /// Every minute, lets libraries whose root came back leave the unavailable state.
+    /// Kept out of the registry: `/actuator/scheduledtasks` reports Java's tasks only.
+    fn start_availability_check(state: AppState) {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {
+                interval.tick().await;
+                let state = state.clone();
+                // listing roots can block on slow or remote filesystems
+                match tokio::task::spawn_blocking(move || {
+                    crate::service::library_content::recover_unavailable_libraries(&state)
+                })
+                .await
+                {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => tracing::error!("Failed to check unavailable libraries: {e}"),
+                    Err(e) => tracing::error!("Unavailable library check failed: {e}"),
+                }
+            }
+        });
     }
 }
 
