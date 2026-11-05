@@ -18,7 +18,8 @@ use objc2_app_kit::{
     NSAlertStyle, NSApplication, NSApplicationActivationPolicy, NSColor, NSEvent,
     NSEventModifierFlags, NSEventType, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
     NSLinkAttributeName, NSMenu, NSMenuItem, NSMutableParagraphStyle,
-    NSParagraphStyleAttributeName, NSTextAlignment, NSWindowCollectionBehavior,
+    NSParagraphStyleAttributeName, NSRunningApplication, NSTextAlignment,
+    NSWindowCollectionBehavior,
 };
 use objc2_foundation::{
     ns_string, NSActivityOptions, NSDictionary, NSMutableAttributedString, NSPoint, NSProcessInfo,
@@ -64,6 +65,33 @@ fn launched_by_login_agent() -> bool {
 /// every restart, so it ends with a successful exit instead and stays down.
 pub fn startup_failure_exits_cleanly() -> bool {
     launched_by_login_agent() && !SERVING.load(Ordering::SeqCst)
+}
+
+/// The login item's copy of a server that is already running. Turning Open at
+/// Login on starts the login item right away while the server that turned it on
+/// keeps running, so this copy finds the data directory in use. Both signals
+/// are needed: the index reports any failure to take its lock as busy, even on
+/// a filesystem without file locks.
+pub fn duplicate_of_running_server(error: &anyhow::Error) -> bool {
+    launched_by_login_agent()
+        && error.chain().any(|cause| {
+            cause
+                .downcast_ref::<komga_search::Error>()
+                .is_some_and(komga_search::Error::index_in_use)
+        })
+        && another_instance_running()
+}
+
+/// Whether another process of this app is running in the user's session.
+fn another_instance_running() -> bool {
+    let current = NSRunningApplication::currentApplication();
+    let Some(bundle_id) = current.bundleIdentifier() else {
+        return false;
+    };
+    let pid = current.processIdentifier();
+    NSRunningApplication::runningApplicationsWithBundleIdentifier(&bundle_id)
+        .iter()
+        .any(|app| app.processIdentifier() != pid)
 }
 
 /// A plain launch from Finder, the Dock or Spotlight while Open at Login is on

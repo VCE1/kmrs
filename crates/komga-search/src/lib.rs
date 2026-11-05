@@ -91,6 +91,21 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+impl Error {
+    /// Whether the index writer lock is held elsewhere, normally by another
+    /// process using the same index directory. The lock is an OS file lock, so
+    /// an exited process never leaves it behind.
+    pub fn index_in_use(&self) -> bool {
+        matches!(
+            self,
+            Error::Tantivy(tantivy::TantivyError::LockFailure(
+                tantivy::directory::error::LockError::LockBusy,
+                _
+            ))
+        )
+    }
+}
+
 pub fn entity_type_str(entity: LuceneEntity) -> &'static str {
     match entity {
         LuceneEntity::Book => "book",
@@ -985,6 +1000,15 @@ mod tests {
             .search_entity_ids(Some("index_version"), LuceneEntity::Book)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn a_second_open_reports_the_index_in_use() {
+        let (dir, _index) = index();
+        let Err(error) = SearchIndex::open(dir.path()) else {
+            panic!("the writer lock should be held by the first index");
+        };
+        assert!(error.index_in_use());
     }
 
     #[test]

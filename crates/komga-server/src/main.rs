@@ -110,7 +110,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(e) = &result {
         // a failure after serving is a crash for launchd to restart: a modal
         // alert would hold the process down until someone dismisses it
-        if !tray::serving() {
+        if !tray::serving() && !tray::duplicate_of_running_server(e) {
             tray::show_startup_error(e);
         }
         // after the modal alert returns, so the process stays up while it shows
