@@ -200,18 +200,6 @@ jobs:
           Remove-Item packaging\windows\kmrs.exe, packaging\windows\kmrs.ico, packaging\windows\pdfium.dll
           Remove-Item -Recurse packaging\windows\PDFium, pdfium
           Remove-Item pdfium.tgz
-      - name: Write update checksums
-        if: matrix.os == 'macos-latest' || matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          if [ "${{ matrix.os }}" = macos-latest ]; then
-            assets=(KMServer.zip)
-          else
-            assets=(KMServer_x64-setup.exe)
-          fi
-          for asset in "${assets[@]}"; do
-            sha256sum "dist/$asset"
-          done > dist/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
           name: kmrs-${{ matrix.target }}
@@ -308,6 +296,9 @@ jobs:
           pattern: "kmrs-*"
           merge-multiple: true
           path: artifacts
+      - name: Write update checksums
+        working-directory: artifacts
+        run: sha256sum * > SHA256SUMS
       - run: gh release create "$TAG" --title "$TAG" --generate-notes --target "$GITHUB_SHA" artifacts/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
