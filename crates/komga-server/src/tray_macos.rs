@@ -144,6 +144,9 @@ thread_local! {
     static AUTOSTART_ITEM: RefCell<Option<CheckMenuItem>> = const { RefCell::new(None) };
     static UPDATE_ITEM: RefCell<Option<MenuItem>> = const { RefCell::new(None) };
     static TRAY_ICON: RefCell<Option<TrayIcon>> = const { RefCell::new(None) };
+    // the badge the icon currently shows, so it is only swapped on a change
+    static BADGE: std::cell::Cell<crate::desktop::Badge> =
+        const { std::cell::Cell::new(crate::desktop::Badge::None) };
 }
 
 pub struct Tray;
@@ -320,14 +323,29 @@ pub fn start(
         return None;
     }
     let (ready_tx, ready_rx) = mpsc::channel();
+    let initial = update.clone();
+    let follow = update.clone();
+    let changes = update.subscribe();
     DispatchQueue::main().exec_async(move || {
         let result = build(port, paths, shutdown, update).map(|item| {
             STATUS_ITEM.with(|slot| *slot.borrow_mut() = Some(item));
+            refresh_update_item(&initial);
         });
         let _ = ready_tx.send(result);
     });
     match ready_rx.recv_timeout(Duration::from_secs(10)) {
-        Ok(Ok(())) => Some(Tray),
+        Ok(Ok(())) => {
+            // an update the daily check finds shows up without opening the menu
+            tokio::spawn(crate::desktop::follow_status(
+                changes,
+                move || {
+                    let update = follow.clone();
+                    DispatchQueue::main().exec_async(move || refresh_update_item(&update));
+                },
+                || DispatchQueue::main().exec_async(advance_spinner),
+            ));
+            Some(Tray)
+        }
         Ok(Err(e)) => {
             tracing::warn!("menu bar item disabled: {e}");
             None
@@ -375,7 +393,7 @@ fn build(
     let update_item = crate::desktop::app_bundle_path().map(|_| {
         MenuItem::with_id(
             "update",
-            crate::desktop::status_label(&update.status()),
+            crate::desktop::update_line(&update.status(), None).title,
             true,
             None,
         )
@@ -477,8 +495,8 @@ fn build(
                 let app = crate::desktop::app_bundle_path().unwrap();
                 let config_dir = config_dir.clone();
                 let login_service = login_item_service(&config_dir);
-                std::thread::spawn(move || match update.status() {
-                    crate::service::desktop_update::Status::Available(_) => {
+                std::thread::spawn(move || {
+                    if crate::desktop::click_installs(&update) {
                         crate::desktop::start_update(
                             update,
                             app,
@@ -487,9 +505,6 @@ fn build(
                             login_service,
                             shutdown,
                         )
-                    }
-                    _ => {
-                        let _ = update.start_check();
                     }
                 });
             }
@@ -501,9 +516,14 @@ fn build(
 }
 
 fn load_icon() -> Result<Icon, String> {
+    load_icon_image(crate::desktop::Badge::None)
+}
+
+fn load_icon_image(badge: crate::desktop::Badge) -> Result<Icon, String> {
     let image = image::load_from_memory_with_format(MENU_BAR_ICON_PNG, image::ImageFormat::Png)
         .map_err(|e| e.to_string())?
         .into_rgba8();
+    let image = crate::desktop::badged_icon(&image, badge, true);
     let (width, height) = image.dimensions();
     Icon::from_rgba(image.into_raw(), width, height).map_err(|e| e.to_string())
 }
@@ -603,13 +623,75 @@ fn refresh_update_item(update: &crate::service::desktop_update::DesktopUpdate) {
     UPDATE_ITEM.with(|slot| {
         if let Some(item) = slot.borrow().as_ref() {
             let status = update.status();
-            item.set_text(crate::desktop::status_label(&status));
-            item.set_enabled(!crate::desktop::busy(&status));
+            let line = crate::desktop::update_line(&status, update.known_version().as_deref());
+            set_update_line(item, &line);
+            item.set_enabled(line.enabled);
             TRAY_ICON.with(|slot| {
                 if let Some(icon) = slot.borrow().as_ref() {
-                    let _ = icon.set_tooltip(Some(crate::desktop::tooltip(&status)));
+                    if let Some(text) = crate::desktop::tooltip(&status) {
+                        let _ = icon.set_tooltip(Some(text));
+                    }
                 }
             });
+            let wanted = crate::desktop::update_badge(&status, update.pending());
+            if let Some(badge) = crate::desktop::badge_change(BADGE.get(), wanted) {
+                show_badge(badge);
+            }
+        }
+    });
+}
+
+/// Shows the update entry, with its hint on a second line in smaller grey type.
+fn set_update_line(item: &MenuItem, line: &crate::desktop::UpdateLine) {
+    use objc2::AllocAnyThread;
+    let Some(hint) = line.hint else {
+        item.set_text(&line.title);
+        return;
+    };
+    let text = format!("{}\n{hint}", line.title);
+    let title = NSMutableAttributedString::initWithString(
+        NSMutableAttributedString::alloc(),
+        &NSString::from_str(&text),
+    );
+    // NSRange counts UTF-16 units
+    let units = |part: &str| part.encode_utf16().count();
+    let hint_range = NSRange::new(units(&text) - units(hint), units(hint));
+    unsafe {
+        title.addAttribute_value_range(
+            NSFontAttributeName,
+            &NSFont::menuFontOfSize(0.0),
+            NSRange::new(0, units(&text)),
+        );
+        title.addAttribute_value_range(
+            NSFontAttributeName,
+            &NSFont::menuFontOfSize(NSFont::smallSystemFontSize()),
+            hint_range,
+        );
+        title.addAttribute_value_range(
+            NSForegroundColorAttributeName,
+            &NSColor::secondaryLabelColor(),
+            hint_range,
+        );
+    }
+    item.set_attributed_title(Some(&title));
+}
+
+fn advance_spinner() {
+    if let Some(badge) = crate::desktop::next_frame(BADGE.get()) {
+        show_badge(badge);
+    }
+}
+
+fn show_badge(badge: crate::desktop::Badge) {
+    TRAY_ICON.with(|slot| {
+        if let Some(icon) = slot.borrow().as_ref() {
+            match load_icon_image(badge) {
+                Ok(image) => {
+                    let _ = icon.set_icon_templated(Some(image));
+                    BADGE.set(badge);
+                }
+                Err(e) => tracing::warn!("menu bar icon decode: {e}"),
+            }
         }
     });
 }

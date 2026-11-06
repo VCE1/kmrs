@@ -27,12 +27,16 @@ pub enum Status {
 pub struct DesktopUpdate {
     state: Arc<Mutex<State>>,
     runtime: tokio::runtime::Handle,
+    // status changes happen on background threads; the tray follows them here
+    changed: Arc<tokio::sync::watch::Sender<Status>>,
 }
 
 #[derive(Default)]
 struct State {
     status: Status,
     selected: Option<Asset>,
+    // the newer release the daily update check found
+    announced: Option<String>,
 }
 
 impl DesktopUpdate {
@@ -40,7 +44,17 @@ impl DesktopUpdate {
         Self {
             state: Arc::new(Mutex::new(State::default())),
             runtime,
+            changed: Arc::new(tokio::sync::watch::channel(Status::default()).0),
         }
+    }
+
+    /// The current status now and after every change.
+    pub fn subscribe(&self) -> tokio::sync::watch::Receiver<Status> {
+        self.changed.subscribe()
+    }
+
+    fn publish(&self, status: &Status) {
+        self.changed.send_replace(status.clone());
     }
 
     pub fn status(&self) -> Status {
@@ -48,6 +62,24 @@ impl DesktopUpdate {
     }
 
     pub fn start_check(&self) -> Result<(), String> {
+        self.begin_check()?;
+        let this = self.clone();
+        self.runtime.spawn(async move {
+            if let Err(e) = check(&this).await {
+                tracing::warn!("update check failed: {e}");
+            }
+        });
+        Ok(())
+    }
+
+    /// Checks and waits for the result, for a retry that goes on to install. Call it off
+    /// the runtime's threads, like `download_verified`.
+    pub fn check_blocking(&self) -> Result<(), String> {
+        self.begin_check()?;
+        self.runtime.block_on(check(self)).map(|_| ())
+    }
+
+    fn begin_check(&self) -> Result<(), String> {
         {
             let mut state = self.state.lock().unwrap();
             if !matches!(
@@ -58,17 +90,35 @@ impl DesktopUpdate {
             }
             state.status = Status::Checking;
         }
-        let this = self.clone();
-        self.runtime.spawn(async move {
-            if let Err(e) = check(&this).await {
-                tracing::warn!("update check failed: {e}");
-            }
-        });
+        self.publish(&Status::Checking);
         Ok(())
     }
 
     fn set(&self, status: Status) {
-        self.state.lock().unwrap().status = status;
+        self.state.lock().unwrap().status = status.clone();
+        self.publish(&status);
+    }
+
+    /// Records the newer release the daily update check found, if any, which a failed
+    /// desktop check (such as a release without checksums) cannot tell on its own.
+    pub fn announce(&self, version: Option<String>) {
+        let mut state = self.state.lock().unwrap();
+        state.announced = version;
+        // the badge and the menu depend on it, so the tray refreshes even when the
+        // status stays
+        self.changed.send_replace(state.status.clone());
+    }
+
+    /// Whether a newer release is known, from either check.
+    pub fn pending(&self) -> bool {
+        self.known_version().is_some()
+    }
+
+    /// The newer release known from either check; the desktop check's pick wins.
+    pub fn known_version(&self) -> Option<String> {
+        let state = self.state.lock().unwrap();
+        let selected = state.selected.as_ref().map(|asset| asset.version.clone());
+        selected.or_else(|| state.announced.clone())
     }
 
     pub fn set_failed(&self, error: String) {
@@ -79,6 +129,7 @@ impl DesktopUpdate {
         let mut state = self.state.lock().unwrap();
         if let Status::Downloading(version) = &state.status {
             state.status = Status::Installing(version.clone());
+            self.publish(&state.status);
         }
     }
 
@@ -89,6 +140,7 @@ impl DesktopUpdate {
         }
         let asset = state.selected.clone().ok_or("no checked update is ready")?;
         state.status = Status::Downloading(asset.version.clone());
+        self.publish(&state.status);
         Ok(asset)
     }
 
@@ -274,6 +326,33 @@ async fn download_asset(asset: &Asset, path: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn status_changes_reach_subscribers() {
+        let update = DesktopUpdate::new(tokio::runtime::Handle::current());
+        let mut changes = update.subscribe();
+        update.set(Status::Available("99.0.0".into()));
+        assert!(changes.has_changed().unwrap());
+        assert_eq!(
+            *changes.borrow_and_update(),
+            Status::Available("99.0.0".into())
+        );
+    }
+
+    #[tokio::test]
+    async fn an_announced_release_stays_pending_after_a_failed_check() {
+        let update = DesktopUpdate::new(tokio::runtime::Handle::current());
+        let mut changes = update.subscribe();
+        update.set_failed("offline".into());
+        assert!(!update.pending());
+        changes.borrow_and_update();
+        update.announce(Some("99.0.0".into()));
+        assert!(changes.has_changed().unwrap());
+        assert!(update.pending());
+        assert_eq!(update.known_version().as_deref(), Some("99.0.0"));
+        update.announce(None);
+        assert!(!update.pending());
+    }
 
     #[tokio::test]
     async fn second_download_cannot_interrupt_an_active_installation() {
