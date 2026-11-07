@@ -116,9 +116,11 @@ export function HorizontalRow({ title, to, collapsible, children, className, onE
           // overflow-x makes overflow-y compute to auto, letting diagonal trackpad swipes rubber-band
           // the row vertically; hidden clips the same but is not user-scrollable, so vertical swipes
           // still chain to the page (overscroll-behavior would swallow them)
-          // negative margins cancel the padding exactly (like -mx-2/px-2) so the title
-          // margin and section gap measure true: pt-3.5 is headroom for the hover shadow
-          className="no-scrollbar -mx-2 -mt-3.5 -mb-2 flex snap-x gap-4 overflow-x-auto overflow-y-hidden px-2 pt-3.5 pb-2"
+          // the padding is room for hover shadows inside the clip, cancelled by equal negative
+          // margins so the title margin and section gap measure true; horizontally it bleeds
+          // into the page gutter (matching the main padding) and scroll-padding keeps snapped
+          // cards aligned with the title
+          className="no-scrollbar -mx-4 -mt-3.5 -mb-6 flex snap-x scroll-px-4 gap-4 overflow-x-auto overflow-y-hidden px-4 pt-3.5 pb-6 md:-mx-8 md:scroll-px-8 md:px-8"
         >
           {children}
         </div>
