@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp } from '@phosphor-icons/react'
 import { useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
-import { useReaderSettings } from '@/lib/store/readerSettings'
+import { useReaderBackground, useReaderSettings } from '@/lib/store/readerSettings'
+import { cn } from '@/lib/utils/cn'
 import { slotAspectRatio, type SpreadPage } from '@/lib/utils/spreads'
 import { useWindowKeys } from './keys'
 import { PageImage } from './PageImage'
+import { useEdgePull, type PullDirection } from './useEdgePull'
 import { usePinchZoom } from './usePinchZoom'
+import type { BookDto } from '@/lib/api/types'
 
 interface ContinuousReaderProps {
   pages: SpreadPage[]
@@ -14,6 +18,11 @@ interface ContinuousReaderProps {
   onToggleChrome: () => void
   onJumpPrevious: () => void
   onJumpNext: () => void
+  /** siblings the edge pull can land on; null means the pull exits the reader */
+  previousBook: BookDto | null
+  nextBook: BookDto | null
+  /** a committed pull leaves the book directly, skipping the two-step boundary toast */
+  onLeaveBook: (dir: 'previous' | 'next') => void
   onMeasure: (page: number, width: number, height: number) => void
 }
 
@@ -24,12 +33,16 @@ export function ContinuousReader({
   onToggleChrome,
   onJumpPrevious,
   onJumpNext,
+  previousBook,
+  nextBook,
+  onLeaveBook,
   onMeasure,
 }: ContinuousReaderProps) {
   const scale = useReaderSettings((s) => s.continuousScale)
   const padding = useReaderSettings((s) => s.continuousPadding)
   const margin = useReaderSettings((s) => s.continuousMargin)
   const animations = useReaderSettings((s) => s.animations)
+  const swipe = useReaderSettings((s) => s.swipe)
   const reduceMotion = useReducedMotion()
   const { t } = useTranslation('reader')
 
@@ -41,6 +54,7 @@ export function ContinuousReader({
     onPointerMove,
     onPointerUp,
     onPointerCancel,
+    gestureConsumed,
     consumeClick,
     reset: resetPinch,
   } = usePinchZoom({ zoomedTouchAction: 'pan-y' })
@@ -55,6 +69,18 @@ export function ContinuousReader({
   const posRef = useRef({ top: 0, max: 1 })
   const lastKeyRef = useRef(0)
   const [seen, setSeen] = useState<boolean[]>(() => pages.map(() => false))
+
+  const barPrevRef = useRef<HTMLDivElement>(null)
+  const barNextRef = useRef<HTMLDivElement>(null)
+  const pull = useEdgePull({
+    scroller: () => scrollRef.current,
+    bar: (dir) => (dir === 'next' ? barNextRef.current : barPrevRef.current),
+    enabled: !zoomed && swipe,
+    gestureConsumed,
+    onLeave: onLeaveBook,
+    resetKey: pages,
+  })
+  const light = useReaderBackground() === 'WHITE'
 
   const onPageChangeRef = useRef(onPageChange)
   useEffect(() => {
@@ -150,7 +176,7 @@ export function ContinuousReader({
 
   // click regions instead of overlay zones: overlays would swallow wheel scrolling
   const onClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (consumeClick()) return
+    if (consumeClick() || pull.consumeClick()) return
     // while zoomed a tap only toggles chrome; a scroll jump would dump the zoom
     if (zoomed) {
       onToggleChrome()
@@ -163,9 +189,49 @@ export function ContinuousReader({
     else onToggleChrome()
   }
 
+  const pullLabel = (dir: PullDirection) => {
+    const sibling = dir === 'next' ? nextBook : previousBook
+    const release = pull.armed === dir
+    if (!sibling) return t(release ? 'pull.exitRelease' : 'pull.exit')
+    return t(release ? `pull.${dir}Release` : `pull.${dir}`)
+  }
+
+  const pullBar = (dir: PullDirection, ref: React.RefObject<HTMLDivElement | null>) => {
+    const next = dir === 'next'
+    const sibling = next ? nextBook : previousBook
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'pointer-events-none absolute inset-x-0 z-10 flex h-14 flex-col items-center justify-center gap-0.5 backdrop-blur-sm',
+          next ? 'bottom-0 border-t' : 'top-0 border-b',
+          light ? 'border-black/10 bg-white/85 text-black' : 'border-white/10 bg-black/75 text-white',
+          // the transform is written per frame while pulling; the transition only runs on snap-back
+          '[&.snapping]:transition-transform [&.snapping]:duration-200',
+        )}
+        style={{ transform: `translateY(${next ? 56 : -56}px)` }}
+      >
+        <div
+          className={cn(
+            'flex items-center gap-1.5 text-[13px]',
+            pull.armed === dir && 'font-semibold',
+          )}
+        >
+          {next ? <ArrowDown aria-hidden className="size-4" /> : <ArrowUp aria-hidden className="size-4" />}
+          <span>{pullLabel(dir)}</span>
+        </div>
+        {sibling && (
+          <p className="max-w-[80%] truncate text-[11px] opacity-60">
+            {sibling.metadata.title || sibling.name}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
-      className="h-full overflow-hidden"
+      className="relative h-full overflow-hidden"
       style={{ touchAction }}
       onClick={onClick}
       onPointerDown={onPointerDown}
@@ -178,7 +244,12 @@ export function ContinuousReader({
         className="h-full"
         style={{ transformOrigin: '0 0', willChange: zoomed ? 'transform' : undefined }}
       >
-        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-none no-scrollbar">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          onWheel={pull.onWheel}
+          className="h-full overflow-y-auto overscroll-none no-scrollbar"
+        >
           {pages.map((p, i) => {
             const load = i === 0 || seen[i] || Math.abs(i + 1 - page) <= 2
             return (
@@ -203,6 +274,8 @@ export function ContinuousReader({
           })}
         </div>
       </div>
+      {pullBar('previous', barPrevRef)}
+      {pullBar('next', barNextRef)}
     </div>
   )
 }

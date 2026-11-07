@@ -69,6 +69,14 @@
     "customized": "Cette série a des réglages personnalisés",
     "resetOverrides": "Rétablir les valeurs par défaut"
   },
+  "pull": {
+    "next": "Tirez encore pour le livre suivant",
+    "nextRelease": "Relâchez pour le livre suivant",
+    "previous": "Tirez encore pour le livre précédent",
+    "previousRelease": "Relâchez pour le livre précédent",
+    "exit": "Tirez encore pour quitter",
+    "exitRelease": "Relâchez pour quitter"
+  },
   "filter": {
     "brightness": "Luminosité",
     "contrast": "Contraste",

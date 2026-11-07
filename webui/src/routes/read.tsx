@@ -502,6 +502,9 @@ function Reader({ bookId }: { bookId: string }) {
           onToggleChrome={toggleChrome}
           onJumpPrevious={() => boundaryTurn('previous')}
           onJumpNext={() => boundaryTurn('next')}
+          previousBook={siblingPrevious}
+          nextBook={siblingNext}
+          onLeaveBook={goBook}
           onMeasure={reportDims}
         />
       ) : (

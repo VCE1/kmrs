@@ -69,6 +69,14 @@
     "customized": "Esta serie tiene ajustes propios",
     "resetOverrides": "Restablecer valores predeterminados"
   },
+  "pull": {
+    "next": "Sigue tirando para el libro siguiente",
+    "nextRelease": "Suelta para el libro siguiente",
+    "previous": "Sigue tirando para el libro anterior",
+    "previousRelease": "Suelta para el libro anterior",
+    "exit": "Sigue tirando para salir",
+    "exitRelease": "Suelta para salir"
+  },
   "filter": {
     "brightness": "Brillo",
     "contrast": "Contraste",

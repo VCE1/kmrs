@@ -69,6 +69,14 @@
     "customized": "本系列有自定义设置",
     "resetOverrides": "恢复全局默认"
   },
+  "pull": {
+    "next": "继续拉动进入下一本",
+    "nextRelease": "松手进入下一本",
+    "previous": "继续拉动进入上一本",
+    "previousRelease": "松手进入上一本",
+    "exit": "继续拉动退出阅读",
+    "exitRelease": "松手退出阅读"
+  },
   "filter": {
     "brightness": "亮度",
     "contrast": "对比度",

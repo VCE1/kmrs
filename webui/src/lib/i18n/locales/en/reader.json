@@ -69,6 +69,14 @@
     "customized": "This series has custom settings",
     "resetOverrides": "Reset to defaults"
   },
+  "pull": {
+    "next": "Pull for next book",
+    "nextRelease": "Release for next book",
+    "previous": "Pull for previous book",
+    "previousRelease": "Release for previous book",
+    "exit": "Pull to exit",
+    "exitRelease": "Release to exit"
+  },
   "filter": {
     "brightness": "Brightness",
     "contrast": "Contrast",

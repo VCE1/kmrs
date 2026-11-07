@@ -19,6 +19,7 @@ import { BookTransition } from './BookTransition'
 import { useWindowKeys } from './keys'
 import { PageImage } from './PageImage'
 import { tapAction } from './tapZones'
+import { useDragTurn } from './useDragTurn'
 import { usePinchZoom } from './usePinchZoom'
 
 interface PagedReaderProps {
@@ -194,9 +195,9 @@ export function PagedReader({
   const {
     targetRef,
     zoomed,
-    touchAction,
+    touchAction: pinchTouchAction,
     onPointerDown: pinchPointerDown,
-    onPointerMove,
+    onPointerMove: pinchPointerMove,
     onPointerUp: pinchPointerUp,
     onPointerCancel: pinchPointerCancel,
     gestureConsumed,
@@ -298,34 +299,53 @@ export function PagedReader({
   }
 
   // a swipe consumes the click that the browser fires after pointerup
-  const pointerRef = useRef<{ x: number; y: number } | null>(null)
   const swipedRef = useRef(false)
+  const trackRef = useRef<HTMLDivElement>(null)
+  // the drag follows the finger only where the turn axis does not scroll natively (fit modes)
+  // and the track actually slides; elsewhere the swipe keeps its release-only thresholds
+  const followDrag = !crossfade && (vertical ? !scrollable : !hugContent)
+  const drag = useDragTurn({
+    track: () => trackRef.current,
+    vertical,
+    flip,
+    follow: followDrag,
+    animate,
+    resting: transition === 'next' ? spreads.length : transition === 'previous' ? -1 : shownIndex,
+    spreadCount: spreads.length,
+    followForward: !(curSplittable && splitHalf === 0),
+    followBackward: !(curSplittable && splitHalf === 1),
+    // a double spread packs two pages into the viewport, so the same drag distance sweeps
+    // twice the content past the eye; committing earlier keeps the gesture from feeling heavy
+    commitRatio: pageLayout === 'SINGLE_PAGE' ? 0.5 : 0.3,
+    swipe,
+    onNext: next,
+    onPrevious: prev,
+    onLeave: onLeaveBook,
+    gestureConsumed,
+    markSwiped: () => {
+      swipedRef.current = true
+    },
+  })
+  // following the finger needs the turn axis taken away from native scrolling
+  const touchAction =
+    !zoomed && swipe && followDrag ? (vertical ? 'pan-x' : 'pan-y') : pinchTouchAction
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // a touch that moved fires no click, so a flag left by the last drag must not eat this tap
+    if (e.isPrimary) swipedRef.current = false
     pinchPointerDown(e)
-    if (!swipe || !e.isPrimary) return
-    pointerRef.current = { x: e.clientX, y: e.clientY }
+    drag.onPointerDown(e)
+  }
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    pinchPointerMove(e)
+    drag.onPointerMove(e)
   }
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     pinchPointerUp(e)
-    const start = pointerRef.current
-    pointerRef.current = null
-    if (!start) return
-    if (gestureConsumed()) return
-    const dx = e.clientX - start.x
-    const dy = e.clientY - start.y
-    if (vertical) {
-      if (Math.abs(dy) < 48 || Math.abs(dy) < Math.abs(dx)) return
-      swipedRef.current = true
-      ;(dy < 0 ? next : prev)()
-    } else {
-      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return
-      swipedRef.current = true
-      ;(dx < 0 ? turnRight : turnLeft)()
-    }
+    drag.onPointerUp(e)
   }
   const onPointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
     pinchPointerCancel(e)
-    pointerRef.current = null
+    drag.onPointerCancel()
   }
 
   // click regions instead of overlay zones: overlays would swallow wheel scrolling
@@ -375,11 +395,14 @@ export function PagedReader({
         <div
           // remounted on a mode switch, or every slide would fade out from the strip's opaque state
           key={crossfade ? 'crossfade' : 'strip'}
+          ref={trackRef}
           className={cn(
             'relative h-full w-full',
             !crossfade && 'flex',
             !crossfade && (vertical ? 'flex-col' : flip && 'flex-row-reverse'),
             !crossfade && animate && 'transition-transform duration-300 ease-[cubic-bezier(.25,.8,.5,1)]',
+            // a drag writes the transform per frame; the transition would lag it behind the finger
+            '[&.dragging]:transition-none',
           )}
           style={crossfade ? undefined : { transform }}
         >

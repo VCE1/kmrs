@@ -69,6 +69,14 @@
     "customized": "このシリーズには個別の設定があります",
     "resetOverrides": "デフォルトに戻す"
   },
+  "pull": {
+    "next": "引っ張って次の本へ",
+    "nextRelease": "離して次の本へ",
+    "previous": "引っ張って前の本へ",
+    "previousRelease": "離して前の本へ",
+    "exit": "引っ張って終了",
+    "exitRelease": "離して終了"
+  },
   "filter": {
     "brightness": "明るさ",
     "contrast": "コントラスト",

@@ -69,6 +69,14 @@
     "customized": "이 시리즈에는 별도의 설정이 있습니다",
     "resetOverrides": "기본값으로 초기화"
   },
+  "pull": {
+    "next": "계속 당기면 다음 책으로",
+    "nextRelease": "놓으면 다음 책으로",
+    "previous": "계속 당기면 이전 책으로",
+    "previousRelease": "놓으면 이전 책으로",
+    "exit": "계속 당기면 나가기",
+    "exitRelease": "놓으면 나가기"
+  },
   "filter": {
     "brightness": "밝기",
     "contrast": "대비",
