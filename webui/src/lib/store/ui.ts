@@ -46,13 +46,23 @@ export function resolveTheme(theme: Theme): 'light' | 'dark' {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
+let themeColorOverride: string | null = null
+
+function applyThemeColor(resolved: 'light' | 'dark') {
+  const color = themeColorOverride ?? (resolved === 'light' ? '#f7f7f5' : '#0b0b0d')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
+}
+
+export function setThemeColorOverride(color: string | null) {
+  themeColorOverride = color
+  applyThemeColor(resolveTheme(useUiStore.getState().theme))
+}
+
 export function applyTheme(theme: Theme) {
   const resolved = resolveTheme(theme)
   document.documentElement.classList.toggle('light', resolved === 'light')
   document.documentElement.classList.toggle('dark', resolved === 'dark')
-  document
-    .querySelector('meta[name="theme-color"]')
-    ?.setAttribute('content', resolved === 'light' ? '#f7f7f5' : '#0b0b0d')
+  applyThemeColor(resolved)
 }
 
 /** Density multiplies the base card width (kmreader: 0.8 / 1.0 / 1.3). */

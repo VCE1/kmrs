@@ -42,6 +42,7 @@ import { ShortcutsHelp } from '@/components/reader/ShortcutsHelp'
 import { ThumbnailExplorer } from '@/components/reader/ThumbnailExplorer'
 import { useWindowKeys } from '@/components/reader/keys'
 import { useReaderNav } from '@/components/reader/useReaderNav'
+import { useReaderViewportBackground } from '@/components/reader/useReaderViewportBackground'
 
 const SCALE_CYCLE: ScaleType[] = ['SCREEN', 'WIDTH', 'WIDTH_SHRINK_ONLY', 'HEIGHT', 'ORIGINAL']
 const CONTINUOUS_SCALE_CYCLE: ContinuousScaleType[] = ['WIDTH', 'ORIGINAL']
@@ -112,6 +113,7 @@ function Reader({ bookId }: { bookId: string }) {
   const book = bookQuery.data
   // reflowable EPUBs go to the Readium-based reader and have no image pages
   const reflowableEpub = book?.media.mediaProfile === 'EPUB' && !book.media.epubDivinaCompatible
+  useReaderViewportBackground(reflowableEpub ? null : READER_BACKGROUNDS[background])
   const seriesQuery = useQuery({
     queryKey: ['series', 'detail', book?.seriesId],
     queryFn: () => seriesApi.get(book!.seriesId),

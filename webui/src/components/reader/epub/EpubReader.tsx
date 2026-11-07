@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useWindowKeys } from '@/components/reader/keys'
 import { useReaderNav } from '@/components/reader/useReaderNav'
+import { useReaderViewportBackground } from '@/components/reader/useReaderViewportBackground'
 import { alignLocatorHref, buildEpubPreferences, CJK_OPTIMAL_LINE_LENGTH, EPUB_BACKDROP, manifestEntries, positionOf, progressionLocator, resolvePositionLocator, type TocEntry } from './preferences'
 import { EpubChrome } from './EpubChrome'
 import { EpubSettingsPanel } from './EpubSettingsPanel'
@@ -30,6 +31,7 @@ export function EpubReader({ book }: { book: BookDto }) {
   const user = useAuthStore((s) => s.user)
   const backdrop = EPUB_BACKDROP[useReaderSettings((s) => s.epubTheme)]
   const scroll = useReaderSettings((s) => s.epubScroll)
+  useReaderViewportBackground(backdrop)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<EpubNavigator | null>(null)
