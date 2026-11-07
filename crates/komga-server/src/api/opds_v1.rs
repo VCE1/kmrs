@@ -77,6 +77,15 @@ pub fn router() -> Router<AppState> {
             "/opds/v1.2/books/{bookId}/thumbnail",
             routing::get(get_book_thumbnail),
         )
+        // OpdsCommonController serves the v2 thumbnail from this same handler
+        .route(
+            "/opds/v2/books/{bookId}/thumbnail",
+            routing::get(get_book_thumbnail),
+        )
+        .route(
+            "/opds/v1.2/books/{bookId}/file/{*rest}",
+            routing::get(download_book_file),
+        )
         .route(
             "/opds/v1.2/books/{bookId}/pages/{pageNumber}",
             routing::get(get_book_page_opds),
@@ -1720,6 +1729,15 @@ async fn get_book_page_opds(
     .await
 }
 
+/// `CommonBookController.getBookFile`: the trailing path is ignored, like the Spring mapping
+async fn download_book_file(
+    State(state): State<AppState>,
+    auth: RequireAuth,
+    Path((book_id, _)): Path<(String, String)>,
+) -> Result<Response, ApiError> {
+    super::books::download_book_file_internal(state, auth, book_id).await
+}
+
 // endregion
 
 #[cfg(test)]
@@ -2353,6 +2371,108 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(&bytes[0..3], b"\xFF\xD8\xFF");
+    }
+
+    #[tokio::test]
+    async fn thumbnail_served_on_opds_v2_path() {
+        let state = test_state();
+        admin(&state);
+        seed_library(&state, "lib1", "L");
+        seed_series(&state, "s1", "lib1", "S");
+        seed_book(&state, "b1", "s1", "lib1", "B1");
+
+        let png_bytes = std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/resources/hashpage/tg.png/1.png"),
+        )
+        .expect("read png fixture");
+        let file_size = png_bytes.len() as i64;
+        // a generated thumbnail would be re-extracted from the (missing) book file
+        let dir = tempfile::tempdir().unwrap();
+        let sidecar_path = dir.path().join("cover.png");
+        std::fs::write(&sidecar_path, &png_bytes).unwrap();
+        ThumbnailBookDao::new(state.db.clone())
+            .insert(&ThumbnailBook {
+                id: String::new(),
+                book_id: "b1".into(),
+                thumbnail: None,
+                url: Some(format!("file:{}", sidecar_path.display())),
+                selected: true,
+                type_: ThumbnailType::Sidecar,
+                media_type: "image/png".into(),
+                file_size,
+                dimension: komga_core::model::thumbnail::Dimension {
+                    width: 48,
+                    height: 48,
+                },
+                created_date: now_utc(),
+                last_modified_date: now_utc(),
+            })
+            .unwrap();
+
+        let app = test_app(&state);
+        let response = app
+            .oneshot(authed("/opds/v2/books/b1/thumbnail", ADMIN_KEY))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()[axum::http::header::CONTENT_TYPE],
+            "image/jpeg"
+        );
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        // png original is re-encoded as jpeg
+        assert_eq!(&bytes[0..3], b"\xFF\xD8\xFF");
+    }
+
+    #[tokio::test]
+    async fn book_file_served_on_opds_v1_path() {
+        let state = test_state();
+        admin(&state);
+        seed_library(&state, "lib1", "L");
+        seed_series(&state, "s1", "lib1", "S");
+
+        let dir = tempfile::tempdir().unwrap();
+        let book_path = dir.path().join("v01.cbz");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/resources/archives/zip.zip"),
+            &book_path,
+        )
+        .expect("copy zip fixture");
+        {
+            let conn = state.db.rw().unwrap();
+            conn.execute(
+                "INSERT INTO BOOK (ID, NAME, URL, FILE_LAST_MODIFIED, SERIES_ID, LIBRARY_ID) \
+                 VALUES ('b1', 'v01', ?, '2020-01-01 00:00:00.0', 's1', 'lib1')",
+                [format!("file:{}", book_path.display())],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO MEDIA (BOOK_ID, STATUS, MEDIA_TYPE, PAGE_COUNT) VALUES ('b1', 'READY', 'application/zip', 1)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO BOOK_METADATA (BOOK_ID, NUMBER, NUMBER_SORT, TITLE) VALUES ('b1', 1, 1.0, 'v01')",
+                [],
+            )
+            .unwrap();
+        }
+
+        let app = test_app(&state);
+        let response = app
+            .oneshot(authed("/opds/v1.2/books/b1/file/v01.cbz", ADMIN_KEY))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let size = std::fs::metadata(&book_path).unwrap().len();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(bytes.len() as u64, size);
     }
 
     #[tokio::test]

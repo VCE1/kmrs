@@ -119,10 +119,26 @@ pub fn router() -> Router<AppState> {
             "/api/v1/books/{bookId}/resource/{*resource}",
             routing::get(get_book_epub_resource),
         )
-        // the Java controller maps both paths to the same handler
+        // the Java controllers map these OPDS paths to the same handlers
         .route(
             "/opds/v2/books/{bookId}/resource/{*resource}",
             routing::get(get_book_epub_resource),
+        )
+        .route(
+            "/opds/v2/books/{bookId}/file",
+            routing::get(download_book_file),
+        )
+        .route(
+            "/opds/v2/books/{bookId}/file/{*rest}",
+            routing::get(download_book_file_wildcard),
+        )
+        .route(
+            "/opds/v2/books/{bookId}/pages/{pageNumber}/raw",
+            routing::get(get_book_page_raw_by_number),
+        )
+        .route(
+            "/opds/v2/books/{bookId}/progression",
+            routing::get(get_book_progression).put(update_book_progression),
         )
         .route(
             "/api/v1/books/{bookId}/file",
@@ -3324,19 +3340,26 @@ mod tests {
         seed_user(&db, "admin@example.org", "pw", true);
         let app = test_router(state.clone());
 
-        let (status, _, body) = call(
-            &app,
-            "GET",
+        // the OPDS v2 PDF manifest links the same handler (CommonBookController)
+        for uri in [
             "/api/v1/books/b1/pages/1/raw",
-            Some(&basic("admin@example.org", "pw")),
-            None,
-        )
-        .await;
-        assert_eq!(status, StatusCode::BAD_REQUEST);
-        assert_eq!(
-            json(&body)["message"],
-            "400 BAD_REQUEST \"Extractor does not support raw extraction of pages\""
-        );
+            "/opds/v2/books/b1/pages/1/raw",
+        ] {
+            let (status, _, body) = call(
+                &app,
+                "GET",
+                uri,
+                Some(&basic("admin@example.org", "pw")),
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{uri}");
+            assert_eq!(
+                json(&body)["message"],
+                "400 BAD_REQUEST \"Extractor does not support raw extraction of pages\"",
+                "{uri}"
+            );
+        }
     }
 
     // endregion
@@ -3666,6 +3689,14 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::OK);
 
+        // OPDS v2 dual mappings (CommonBookController)
+        for uri in ["/opds/v2/books/b1/file", "/opds/v2/books/b1/file/zip.zip"] {
+            let (status, _, body) =
+                call(&app, "GET", uri, Some(&basic("dl@example.org", "pw")), None).await;
+            assert_eq!(status, StatusCode::OK, "{uri}");
+            assert_eq!(body.len() as u64, size, "{uri}");
+        }
+
         // no FILE_DOWNLOAD role -> 403
         let (status, _, _) = call(
             &app,
@@ -3796,6 +3827,62 @@ mod tests {
             json(&body)["message"],
             "400 BAD_REQUEST \"Page argument (99) must be within 1 and book page count (3)\""
         );
+    }
+
+    #[tokio::test]
+    async fn progression_served_on_opds_v2_path() {
+        let state = test_state_with_settings();
+        let db = state.db.clone();
+        seed_library(&db, "l1");
+        seed_series(&db, "s1", "l1");
+        seed_book(&db, "b1", "s1", "l1", "file:/data/b1.cbz");
+        seed_media(
+            &db,
+            "b1",
+            MediaStatus::Ready,
+            detect::APPLICATION_ZIP,
+            zip_pages(),
+        );
+        seed_user(&db, "admin@example.org", "pw", true);
+        let app = test_router(state.clone());
+        let auth = basic("admin@example.org", "pw");
+
+        // no progress yet: 204
+        let (status, _, _) = call(
+            &app,
+            "GET",
+            "/opds/v2/books/b1/progression",
+            Some(&auth),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let body = r#"{"modified":"2024-01-02T03:04:05Z","device":{"id":"dev1","name":"Tablet"},"locator":{"href":"b1.cbz","type":"application/zip","locations":{"position":1}}}"#;
+        let (status, _, _) = call(
+            &app,
+            "PUT",
+            "/opds/v2/books/b1/progression",
+            Some(&auth),
+            Some(body.into()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+
+        let (status, headers, body) = call(
+            &app,
+            "GET",
+            "/opds/v2/books/b1/progression",
+            Some(&auth),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            headers["content-type"],
+            "application/vnd.readium.progression+json"
+        );
+        assert_eq!(json(&body)["device"]["id"], "dev1");
     }
 
     fn user_id_of(db: &Database, email: &str) -> String {
