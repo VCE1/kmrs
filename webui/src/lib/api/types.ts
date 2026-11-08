@@ -426,6 +426,7 @@ export interface ServerInfoDto {
   version: string
   gitBranch: string
   gitCommitId: string
+  features: string[]
 }
 
 export interface ServerScheduledTaskDto {

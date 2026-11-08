@@ -164,7 +164,7 @@ mod tests {
         assert_eq!(json["skipReadOnNext"], false);
         assert_eq!(json["maxUploadFileSizeBytes"], 1_048_576);
 
-        // non-admin: only maxUploadFileSizeBytes survives
+        // non-admin: only maxUploadFileSizeBytes and skipReadOnNext survive
         insert_user(&state.db, "u@b.c", &[], &[], Default::default(), "u");
         let (status, json) = {
             let (s, _, b) = call(&state, router(), get("/api/v1/settings", "u")).await;
@@ -175,7 +175,7 @@ mod tests {
         assert!(json.get("taskPoolSize").is_none());
         assert!(json.get("serverPort").is_none());
         assert!(json.get("deleteEmptyCollections").is_none());
-        assert!(json.get("skipReadOnNext").is_none());
+        assert_eq!(json["skipReadOnNext"], false);
     }
 
     async fn get_kepubify(state: &AppState, key: &str) -> serde_json::Value {

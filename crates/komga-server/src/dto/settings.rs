@@ -29,12 +29,13 @@ pub struct SettingsDto {
     pub kepubify_path: Option<SettingMultiSource<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_upload_file_size_bytes: Option<i64>,
-    /// kmrs enhancement, admin only
+    /// kmrs enhancement; non-admins see it too so clients can follow it offline
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_read_on_next: Option<bool>,
 }
 impl SettingsDto {
-    /// `SettingsDto.public()`: non-admin users only see the upload size limit
+    /// `SettingsDto.public()`: non-admin users see the upload size limit, plus kmrs's
+    /// skip-read setting
     pub fn public(self) -> Self {
         Self {
             delete_empty_collections: None,
@@ -47,7 +48,7 @@ impl SettingsDto {
             kobo_proxy: None,
             kepubify_path: None,
             max_upload_file_size_bytes: self.max_upload_file_size_bytes,
-            skip_read_on_next: None,
+            skip_read_on_next: self.skip_read_on_next,
         }
     }
 }

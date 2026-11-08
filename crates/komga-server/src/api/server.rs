@@ -11,6 +11,7 @@ use axum::extract::State;
 use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::{routing, Json, Router};
+use komga_db::dao::komf_integration::{KomfIntegrationDao, KomfIntegrationState};
 use serde::Serialize;
 use tokio_util::io::ReaderStream;
 
@@ -32,15 +33,44 @@ struct ServerInfoDto {
     version: String,
     git_branch: String,
     git_commit_id: String,
+    features: Vec<&'static str>,
 }
 
-/// No admin gate: the sidebar footer shows the version to every logged-in user.
-async fn get_info(_auth: RequireAuth) -> Json<ServerInfoDto> {
-    Json(ServerInfoDto {
+/// No admin gate: the sidebar footer shows the version to every logged-in user,
+/// and clients read `features` before any kmrs-private request.
+async fn get_info(
+    _auth: RequireAuth,
+    State(state): State<AppState>,
+) -> Result<Json<ServerInfoDto>, ApiError> {
+    Ok(Json(ServerInfoDto {
         version: env!("CARGO_PKG_VERSION").to_string(),
         git_branch: env!("GIT_BRANCH").to_string(),
         git_commit_id: env!("GIT_COMMIT_ID").to_string(),
-    })
+        features: features(&state)?,
+    }))
+}
+
+/// The kmrs-private features this server can serve right now, so clients learn
+/// from one request what to show instead of probing each endpoint group. A
+/// feature that needs setup is listed only once it is set up.
+fn features(state: &AppState) -> Result<Vec<&'static str>, ApiError> {
+    // /api/v1/stats/libraries, /api/v1/stats/server, /api/v1/stats/reading/**,
+    // /api/v1/smart-lists/**, /api/v2/users/me/sessions, /api/v2/users/sessions
+    let mut features = vec!["serverStats", "readingStats", "smartLists", "sessions"];
+    // /api/v1/komf/** proxies to komf only once the integration is connected
+    let komf = KomfIntegrationDao::new(state.kmrs_db.clone()).get()?;
+    if komf.is_some_and(|row| row.state == KomfIntegrationState::Connected) {
+        features.push("komf");
+    }
+    // /api/v1/trackers/**
+    if !state.tracker.all().is_empty() {
+        features.push("trackers");
+    }
+    // /api/v1/update-check
+    if state.config.update_check_enabled {
+        features.push("updateCheck");
+    }
+    Ok(features)
 }
 
 // endregion
@@ -158,6 +188,17 @@ mod tests {
         assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(body["gitBranch"], env!("GIT_BRANCH"));
         assert_eq!(body["gitCommitId"], env!("GIT_COMMIT_ID"));
+        // test state: no komf integration, no tracker providers, update check on
+        assert_eq!(
+            body["features"],
+            serde_json::json!([
+                "serverStats",
+                "readingStats",
+                "smartLists",
+                "sessions",
+                "updateCheck"
+            ])
+        );
 
         let (status, _, _) = call(
             &state,
@@ -166,6 +207,41 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    async fn info_features(state: &AppState, key: &str) -> serde_json::Value {
+        let (status, _, body) = call(state, router(), get("/api/v1/server/info", key)).await;
+        assert_eq!(status, StatusCode::OK);
+        json(&body)["features"].clone()
+    }
+
+    #[tokio::test]
+    async fn info_lists_komf_only_once_connected() {
+        let state = test_state();
+        let key = seed_user(&state);
+        let dao = KomfIntegrationDao::new(state.kmrs_db.clone());
+
+        dao.upsert("http://komf:8085", "http://kmrs:25600", None)
+            .unwrap();
+        let features = info_features(&state, &key).await;
+        assert!(!features.as_array().unwrap().contains(&"komf".into()));
+
+        dao.mark_connected("owner", "key").unwrap();
+        let features = info_features(&state, &key).await;
+        assert!(features.as_array().unwrap().contains(&"komf".into()));
+    }
+
+    #[tokio::test]
+    async fn info_omits_update_check_when_disabled() {
+        let state = test_state();
+        let config = std::sync::Arc::new(crate::config::ServerConfig {
+            update_check_enabled: false,
+            ..(*state.config).clone()
+        });
+        let state = AppState { config, ..state };
+        let key = seed_user(&state);
+        let features = info_features(&state, &key).await;
+        assert!(!features.as_array().unwrap().contains(&"updateCheck".into()));
     }
 
     #[tokio::test]
