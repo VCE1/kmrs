@@ -57,27 +57,10 @@ function libraryConditions(libraryIds: string[] | undefined): SearchCondition[] 
   return [{ anyOf: libraryIds.map((id) => ({ libraryId: { operator: 'is', value: id } }) as SearchCondition) }]
 }
 
-/**
- * Keeps the books read within the last `days` (0 = all). The page is sorted by read date, newest
- * first, so the first older book ends the list: later pages can't contain newer ones.
- */
-export function readWithin(page: Page<BookDto>, days: number, now = Date.now()): Page<BookDto> {
-  if (days <= 0) return page
-  const cutoff = now - days * 86_400_000
-  const kept = page.content.filter((b) => {
-    const read = b.readProgress?.readDate
-    return read !== undefined && Date.parse(read) >= cutoff
-  })
-  if (kept.length === page.content.length) return page
-  return {
-    ...page,
-    content: kept,
-    numberOfElements: kept.length,
-    empty: kept.length === 0,
-    totalElements: page.number * page.size + kept.length,
-    totalPages: page.number + 1,
-    last: true,
-  }
+/** kmrs's recent reading window as a search condition: books read in the last `days` (0 = all) */
+function readWithinConditions(days: number): SearchCondition[] {
+  if (days <= 0) return []
+  return [{ readDate: { operator: 'isInTheLast', duration: `P${days}D` } }]
 }
 
 // parity with the legacy komga UI: the section covers only the last month of releases
@@ -95,20 +78,21 @@ const seriesGrid = (s: SeriesDto, selection: CardSelection) => <SeriesCard serie
 export const DASHBOARD_SECTIONS = {
   'keep-reading': bookSection({
     titleKey: 'sections.keepReading',
-    fetchPage: async (libraryIds, page, { recentReadingDays }) =>
-      readWithin(
-        await booksApi.list({
-          search: {
-            condition: {
-              allOf: [{ readStatus: { operator: 'is', value: 'IN_PROGRESS' } }, ...libraryConditions(libraryIds)],
-            },
+    fetchPage: (libraryIds, page, { recentReadingDays }) =>
+      booksApi.list({
+        search: {
+          condition: {
+            allOf: [
+              { readStatus: { operator: 'is', value: 'IN_PROGRESS' } },
+              ...readWithinConditions(recentReadingDays),
+              ...libraryConditions(libraryIds),
+            ],
           },
-          page,
-          size: PAGE_SIZE,
-          sort: ['readProgress.readDate,desc'],
-        }),
-        recentReadingDays,
-      ),
+        },
+        page,
+        size: PAGE_SIZE,
+        sort: ['readProgress.readDate,desc'],
+      }),
     renderRow: (b) => <KeepReadingCard book={b} className="snap-start" />,
     renderGrid: bookGrid,
     renderSkeleton: () => <HorizontalCardSkeleton />,

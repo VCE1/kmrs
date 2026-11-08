@@ -238,6 +238,34 @@ fn date_op(field: &str, op: &DateOp) -> SqlWhere {
     }
 }
 
+/// `date_op` for a datetime column, compared to the exact instant: a read date
+/// carries a time of day, unlike the release dates `date_op` matches by day.
+fn datetime_op(field: &str, op: &DateOp) -> SqlWhere {
+    let utc =
+        |dt: time::OffsetDateTime| time_codec::format_datetime(dt.to_offset(time::UtcOffset::UTC));
+    let since = |duration: &komga_core::search::Duration| {
+        time_codec::now_utc() - time::Duration::new(duration.seconds, duration.nanos as i32)
+    };
+    match op {
+        DateOp::After { date_time } => {
+            SqlWhere::bind(format!("{field} > ?"), vec![Value::Text(utc(*date_time))])
+        }
+        DateOp::Before { date_time } => {
+            SqlWhere::bind(format!("{field} < ?"), vec![Value::Text(utc(*date_time))])
+        }
+        DateOp::IsInTheLast { duration } => SqlWhere::bind(
+            format!("{field} > ?"),
+            vec![Value::Text(utc(since(duration)))],
+        ),
+        DateOp::IsNotInTheLast { duration } => SqlWhere::bind(
+            format!("{field} < ?"),
+            vec![Value::Text(utc(since(duration)))],
+        ),
+        DateOp::IsNull => SqlWhere::raw(format!("{field} IS NULL"), BTreeSet::new()),
+        DateOp::IsNotNull => SqlWhere::raw(format!("{field} IS NOT NULL"), BTreeSet::new()),
+    }
+}
+
 fn numeric_nullable_i32(field: &str, op: &NumericNullable<i32>) -> SqlWhere {
     match op {
         NumericNullable::Is { value } => {
@@ -697,6 +725,13 @@ fn book_condition_internal(
             w.joins.insert(RequiredJoin::BookMetadata);
             w
         }
+        SearchConditionBook::ReadDate { operator } => match &ctx.user_id {
+            None => SqlWhere::false_condition(),
+            Some(user_id) => SqlWhere {
+                joins: join_set(&[RequiredJoin::ReadProgress(user_id.clone())]),
+                ..datetime_op("READ_PROGRESS.READ_DATE", operator)
+            },
+        },
         SearchConditionBook::NumberSort { operator } => {
             let mut w = numeric_f32("BOOK_METADATA.NUMBER_SORT", operator);
             w.joins.insert(RequiredJoin::BookMetadata);
@@ -1224,6 +1259,39 @@ mod tests {
         assert_eq!(w.sql, "BOOK_METADATA_AGGREGATION.RELEASE_DATE > ?");
         // 2024-12-31T12:00:00+14:00 is 2024-12-30 22:00 UTC
         assert_eq!(w.params, vec![Value::Text("2024-12-30".to_string())]);
+    }
+
+    #[test]
+    fn read_date_compares_the_requesting_users_read_instant() {
+        let w = book_condition_internal(
+            Some(&parse_book(
+                r#"{"readDate":{"operator":"after","dateTime":"2024-12-31T12:00:00+14:00"}}"#,
+            )),
+            &ctx(Some("u1")),
+        );
+        assert_eq!(w.sql, "READ_PROGRESS.READ_DATE > ?");
+        assert_eq!(
+            w.params,
+            vec![Value::Text("2024-12-30 22:00:00.0".to_string())]
+        );
+        assert!(w
+            .joins
+            .contains(&RequiredJoin::ReadProgress("u1".to_string())));
+
+        let w = book_condition_internal(
+            Some(&parse_book(
+                r#"{"readDate":{"operator":"isInTheLast","duration":"P30D"}}"#,
+            )),
+            &ctx(Some("u1")),
+        );
+        assert_eq!(w.sql, "READ_PROGRESS.READ_DATE > ?");
+
+        // no requesting user: nothing has a read date
+        let w = book_condition_internal(
+            Some(&parse_book(r#"{"readDate":{"operator":"isNotNull"}}"#)),
+            &ctx(None),
+        );
+        assert_eq!(w.sql, SqlWhere::false_condition().sql);
     }
 
     #[test]

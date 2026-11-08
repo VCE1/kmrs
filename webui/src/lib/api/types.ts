@@ -480,7 +480,10 @@ export type SearchOperator =
   | 'isInTheLast'
   | 'isNotInTheLast'
 
-export type ConditionLeaf = Record<string, { operator: SearchOperator; value?: unknown; dateTime?: string }>
+export type ConditionLeaf = Record<
+  string,
+  { operator: SearchOperator; value?: unknown; dateTime?: string; /** ISO 8601, e.g. P30D */ duration?: string }
+>
 
 export interface ConditionGroup {
   allOf?: SearchCondition[]

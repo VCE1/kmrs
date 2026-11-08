@@ -1806,6 +1806,69 @@ mod tests {
     }
 
     #[test]
+    fn find_all_filter_read_date_is_per_user_and_exact() {
+        let db = base_db();
+        let conn = db.rw().unwrap();
+        // base_db: u1 has read b1, b2 and b4
+        for (book, read_date) in [
+            ("b1", "2024-03-01 08:00:00.0"),
+            ("b2", "2024-03-01 20:00:00.5"),
+            ("b4", "2023-01-01 00:00:00.0"),
+        ] {
+            conn.execute(
+                "UPDATE READ_PROGRESS SET READ_DATE = ? WHERE BOOK_ID = ? AND USER_ID = 'u1'",
+                params![read_date, book],
+            )
+            .unwrap();
+        }
+        drop(conn);
+        let at = |s: &str| {
+            time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339).unwrap()
+        };
+        let find = |operator: DateOp, ctx: &SearchContext| {
+            let page = dao(&db)
+                .find_all(
+                    &search(Some(SearchConditionBook::ReadDate { operator })),
+                    ctx,
+                    &unpaged(),
+                )
+                .unwrap();
+            id_set(&page)
+        };
+
+        // the same day splits by time of day
+        assert_eq!(
+            find(
+                DateOp::After {
+                    date_time: at("2024-03-01T12:00:00Z")
+                },
+                &ctx_user()
+            ),
+            set(&["b2"])
+        );
+        assert_eq!(
+            find(
+                DateOp::Before {
+                    date_time: at("2024-03-01T12:00:00Z")
+                },
+                &ctx_user()
+            ),
+            set(&["b1", "b4"])
+        );
+        assert_eq!(
+            find(DateOp::IsNotNull, &ctx_user()),
+            set(&["b1", "b2", "b4"])
+        );
+
+        // another user's read dates don't count
+        let other = SearchContext {
+            user_id: Some("u2".to_string()),
+            ..ctx_user()
+        };
+        assert_eq!(find(DateOp::IsNotNull, &other), set(&[]));
+    }
+
+    #[test]
     fn find_all_filter_media_profile() {
         let db = base_db();
         let by = |profile: MediaProfile| SearchConditionBook::MediaProfile {

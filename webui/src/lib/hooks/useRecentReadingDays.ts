@@ -5,8 +5,8 @@ import { settingsApi } from '@/lib/api/settings'
 export const SERVER_SETTINGS_KEY = ['settings'] as const
 
 /**
- * The server's recent reading window in days; 0 = off. On Deck is filtered by the server, Keep
- * Reading goes through the generic book search, so the client applies the window there.
+ * The server's recent reading window in days; 0 = off. On Deck is filtered by the server; Keep
+ * Reading goes through the generic book search, so the client adds a `readDate` condition to it.
  */
 export function useRecentReadingDays(): { days: number; isPending: boolean } {
   const query = useQuery({ queryKey: SERVER_SETTINGS_KEY, queryFn: settingsApi.get, staleTime: 5 * 60_000 })

@@ -63,8 +63,7 @@ export function DashboardSectionPage() {
 
   const items = query.data?.pages.flatMap((p) => p.content) ?? []
   const loadedIds = items.map((item) => item.id)
-  // the last loaded page: a cut-off Keep Reading page carries the corrected total
-  const total = query.data?.pages.at(-1)?.totalElements
+  const total = query.data?.pages[0]?.totalElements
 
   return (
     <div>

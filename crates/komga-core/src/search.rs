@@ -330,6 +330,12 @@ pub enum SearchConditionBook {
         #[serde(rename = "releaseDate")]
         operator: DateOp,
     },
+    /// kmrs: when the requesting user last read the book, compared to the instant
+    /// rather than the day; a book they never opened has no read date
+    ReadDate {
+        #[serde(rename = "readDate")]
+        operator: DateOp,
+    },
     Tag {
         tag: EqualityNullable<String>,
     },
