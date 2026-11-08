@@ -458,7 +458,7 @@ fn install_macos(
 fn verify_app(app: &Path) -> Result<(), String> {
     for (program, args) in [
         ("/usr/bin/codesign", vec!["--verify", "--deep", "--strict"]),
-        ("/usr/bin/spctl", vec!["--assess", "--type", "execute"]),
+        ("/usr/sbin/spctl", vec!["--assess", "--type", "execute"]),
     ] {
         let status = std::process::Command::new(program)
             .args(args)
