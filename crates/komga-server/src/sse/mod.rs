@@ -106,6 +106,15 @@ async fn sse_events(
     headers: axum::http::HeaderMap,
 ) -> Response {
     let user = auth.0.user;
+    // as in Komga's SseController lifecycle: no new streams once shutdown has started,
+    // and open ones complete so graceful shutdown can finish
+    let mut shutdown = state.shutdown_tx.subscribe();
+    if *shutdown.borrow() {
+        return Response::builder()
+            .status(axum::http::StatusCode::SERVICE_UNAVAILABLE)
+            .body(Body::empty())
+            .unwrap();
+    }
     let last_event_id = headers
         .get("last-event-id")
         .map(|value| value.to_str().unwrap_or_default());
@@ -134,6 +143,7 @@ async fn sse_events(
 
         loop {
             let wire = tokio::select! {
+                _ = async { let _ = shutdown.wait_for(|stopping| *stopping).await; } => break,
                 _ = heartbeat.tick() => Wire::Comment("heartbeat"),
                 _ = task_status.tick() => {
                     if !user.is_admin() {
@@ -1016,6 +1026,41 @@ mod tests {
         let mut body = connect(&state, "key1").await;
         let acc = read_until(&mut body, ":heartbeat", Duration::from_secs(2)).await;
         assert!(acc.contains(":heartbeat"), "no heartbeat in: {acc:?}");
+    }
+
+    #[tokio::test]
+    async fn stream_ends_on_shutdown() {
+        let state = test_state();
+        let user_id = insert_user(&state.db, "admin@komga.org", true);
+        insert_api_key(&state.db, &user_id, "key1");
+
+        let mut body = connect(&state, "key1").await;
+        let acc = read_until(&mut body, ":heartbeat", Duration::from_secs(2)).await;
+        assert!(acc.contains(":heartbeat"), "stream not live: {acc:?}");
+
+        state.shutdown_tx.send_replace(true);
+        let ended = tokio::time::timeout(Duration::from_secs(2), async {
+            while let Some(frame) = body.frame().await {
+                frame.unwrap();
+            }
+        })
+        .await;
+        assert!(ended.is_ok(), "SSE stream still open after shutdown");
+    }
+
+    #[tokio::test]
+    async fn refused_after_shutdown() {
+        let state = test_state();
+        let user_id = insert_user(&state.db, "admin@komga.org", true);
+        insert_api_key(&state.db, &user_id, "key1");
+        state.shutdown_tx.send_replace(true);
+
+        let request = Request::get("/sse/v1/events")
+            .header("X-API-Key", "key1")
+            .body(Body::empty())
+            .unwrap();
+        let response = test_app(&state).oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]

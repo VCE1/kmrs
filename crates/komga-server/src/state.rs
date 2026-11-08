@@ -28,7 +28,9 @@ pub struct AppState {
     pub tracker: Arc<crate::service::tracker::TrackerServices>,
     pub kepub: Arc<crate::service::kepub::KepubConverter>,
     pub kobo_proxy: Arc<crate::service::kobo_proxy::KoboProxy>,
-    /// Broadcasts the shutdown request (the Windows tray's exit action)
+    /// Broadcasts shutdown: the tray's quit action and desktop updates request it, and it is
+    /// set once shutdown starts for any reason so open SSE streams can end
+    /// (graceful shutdown waits for them)
     pub shutdown_tx: tokio::sync::watch::Sender<bool>,
     pub api_key_activity_throttle: Arc<crate::auth::ApiKeyActivityThrottle>,
     pub latest_update: crate::service::update_check::LatestUpdate,

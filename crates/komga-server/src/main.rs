@@ -329,7 +329,7 @@ async fn run() -> anyhow::Result<()> {
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal(shutdown_rx))
+    .with_graceful_shutdown(shutdown_signal(shutdown_rx, state.shutdown_tx.clone()))
     .await;
     // the tray stands for a serving server: it goes as soon as serving ends, on
     // the error path too, not after the task drain below
@@ -421,7 +421,10 @@ pub fn build_router(state: AppState) -> axum::Router {
     app.with_state(state)
 }
 
-async fn shutdown_signal(mut shutdown_rx: tokio::sync::watch::Receiver<bool>) {
+async fn shutdown_signal(
+    mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    shutdown_tx: tokio::sync::watch::Sender<bool>,
+) {
     // launchd stops a login item with SIGTERM: at logout, and when Open at Login
     // is turned off while the login item runs the server
     #[cfg(target_os = "macos")]
@@ -444,4 +447,7 @@ async fn shutdown_signal(mut shutdown_rx: tokio::sync::watch::Receiver<bool>) {
         _ = shutdown_rx.changed() => {},
     }
     tracing::info!("shutting down");
+    // graceful shutdown waits for every open connection; SSE streams only end
+    // when told to, so a signal-initiated shutdown must reach them as well
+    shutdown_tx.send_replace(true);
 }
