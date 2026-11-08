@@ -51,11 +51,14 @@
   },
   "tops": {
     "title": "Most read",
+    "seriesHeading": "Series",
     "authors": "Authors",
     "genres": "Genres",
     "tags": "Tags",
     "series_one": "{{count}} series",
     "series_other": "{{count}} series",
-    "empty": "Finish some books to see your most read authors, genres and tags."
+    "booksOfTotal_one": "{{read}} of {{count}} book",
+    "booksOfTotal_other": "{{read}} of {{count}} books",
+    "empty": "Finish some books to see your most read series, authors, genres and tags."
   }
 }

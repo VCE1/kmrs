@@ -47,10 +47,12 @@
   },
   "tops": {
     "title": "常读排行",
+    "seriesHeading": "系列",
     "authors": "作者",
     "genres": "题材",
     "tags": "标签",
     "series_other": "{{count}} 部",
-    "empty": "读完一些书后，这里会显示你常读的作者、题材和标签。"
+    "booksOfTotal_other": "已读 {{read}} / 共 {{count}} 本",
+    "empty": "读完一些书后，这里会显示你常读的系列、作者、题材和标签。"
   }
 }

@@ -39,6 +39,7 @@ pub struct ReadingActivityDto {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadingTopsDto {
+    pub top_series: Vec<SeriesValueDto>,
     pub top_authors: Vec<NamedValueDto>,
     pub top_genres: Vec<NamedValueDto>,
     pub top_tags: Vec<NamedValueDto>,
@@ -46,6 +47,16 @@ pub struct ReadingTopsDto {
     pub tag_distribution: Vec<NamedValueDto>,
     #[serde(with = "dto_datetime")]
     pub generated_at: time::OffsetDateTime,
+}
+
+/// A top-series entry: completed books out of the series' visible books.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeriesValueDto {
+    pub series_id: String,
+    pub name: String,
+    pub value: i64,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

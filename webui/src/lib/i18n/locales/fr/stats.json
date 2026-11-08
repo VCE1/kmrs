@@ -55,12 +55,16 @@
   },
   "tops": {
     "title": "Les plus lus",
+    "seriesHeading": "Séries",
     "authors": "Auteurs",
     "genres": "Genres",
     "tags": "Étiquettes",
     "series_one": "{{count}} série",
     "series_many": "{{count}} séries",
     "series_other": "{{count}} séries",
-    "empty": "Terminez quelques livres pour voir vos auteurs, genres et étiquettes les plus lus."
+    "booksOfTotal_one": "{{read}} sur {{count}} livre",
+    "booksOfTotal_many": "{{read}} sur {{count}} livres",
+    "booksOfTotal_other": "{{read}} sur {{count}} livres",
+    "empty": "Terminez quelques livres pour voir vos séries, auteurs, genres et étiquettes les plus lus."
   }
 }

@@ -36,6 +36,17 @@ pub struct CompletedBook {
     pub read_day: Date,
 }
 
+/// A series with at least one completed visible book, for the top-series list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeriesReadCount {
+    pub series_id: String,
+    pub title: String,
+    /// Completed visible books of the series.
+    pub read: i64,
+    /// All visible books of the series.
+    pub total: i64,
+}
+
 /// SERIES_METADATA joins on its primary key (1:1), so when the visibility fragment
 /// does not reference it (no content restrictions) the join cannot change the result
 /// and is skipped. `series_id_column` is the left side of the join condition.
@@ -366,6 +377,50 @@ impl ReadingStatsDtoDao {
         self.name_counts(&sql, params)
     }
 
+    /// The `limit` series with the most completed books, sorted by completed count desc,
+    /// then title asc (byte-wise), then id. Needs no metadata beyond the series title, so
+    /// it fills the tops for libraries that have no authors, genres or tags.
+    pub fn series_counts(
+        &self,
+        user_id: &str,
+        visibility: &SqlWhere,
+        limit: usize,
+    ) -> Result<Vec<SeriesReadCount>> {
+        let conn = self.db.ro()?;
+        // SERIES_METADATA is joined unconditionally for the title, which also satisfies
+        // any visibility fragment referencing it; the progress user id binds first (JOIN
+        // precedes WHERE)
+        let sql = format!(
+            "SELECT BOOK.SERIES_ID, SERIES_METADATA.TITLE, \
+               SUM(CASE WHEN READ_PROGRESS.COMPLETED = 1 THEN 1 ELSE 0 END) AS READ_COUNT, \
+               COUNT(*) \
+             FROM BOOK \
+             INNER JOIN SERIES_METADATA ON (BOOK.SERIES_ID = SERIES_METADATA.SERIES_ID) \
+             LEFT JOIN READ_PROGRESS ON (BOOK.ID = READ_PROGRESS.BOOK_ID AND READ_PROGRESS.USER_ID = ?)\
+             {} \
+             GROUP BY BOOK.SERIES_ID, SERIES_METADATA.TITLE \
+             HAVING READ_COUNT > 0 \
+             ORDER BY READ_COUNT DESC, SERIES_METADATA.TITLE ASC, BOOK.SERIES_ID ASC \
+             LIMIT {limit}",
+            where_clause(visibility)
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt
+            .query_map(
+                rusqlite::params_from_iter(user_params(user_id, visibility)),
+                |row| {
+                    Ok(SeriesReadCount {
+                        series_id: row.get(0)?,
+                        title: row.get(1)?,
+                        read: row.get(2)?,
+                        total: row.get(3)?,
+                    })
+                },
+            )?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
     /// Rows of (name, count) sorted by count desc, name asc (byte-wise): the contract of
     /// every top/distribution list.
     fn name_counts(&self, sql: &str, params: Vec<Value>) -> Result<Vec<(String, i64)>> {
@@ -571,6 +626,53 @@ mod tests {
             .unwrap()
             .len(),
             2
+        );
+    }
+
+    #[test]
+    fn series_counts_rank_completed_books_and_respect_visibility() {
+        let db = db();
+        seed(&db);
+        let dao = ReadingStatsDtoDao::new(db.clone());
+        let entry = |id: &str, read, total| SeriesReadCount {
+            series_id: id.to_string(),
+            title: id.to_string(),
+            read,
+            total,
+        };
+
+        // the in-progress b2 and unread b4 count toward the totals only
+        let vis = book_visibility(&unrestricted(), None);
+        assert_eq!(
+            dao.series_counts("u1", &vis, 10).unwrap(),
+            [entry("s1", 1, 2), entry("s2", 1, 2)]
+        );
+        assert_eq!(
+            dao.series_counts("u1", &vis, 1).unwrap(),
+            [entry("s1", 1, 2)]
+        );
+        // another user's progress counts nothing
+        assert!(dao.series_counts("u2", &vis, 10).unwrap().is_empty());
+
+        let l2_only = book_visibility(&unrestricted(), Some(BTreeSet::from(["l2".to_string()])));
+        assert_eq!(
+            dao.series_counts("u1", &l2_only, 10).unwrap(),
+            [entry("s2", 1, 2)]
+        );
+
+        // the age restriction references SERIES_METADATA, which the query always joins
+        let restricted = ContentRestrictions::new(
+            Some(AgeRestriction {
+                age: 18,
+                restriction: AllowExclude::Exclude,
+            }),
+            BTreeSet::new(),
+            BTreeSet::new(),
+        );
+        assert_eq!(
+            dao.series_counts("u1", &book_visibility(&restricted, None), 10)
+                .unwrap(),
+            [entry("s1", 1, 2)]
         );
     }
 

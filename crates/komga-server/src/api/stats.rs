@@ -6,8 +6,9 @@
 use crate::auth::RequireAuth;
 use crate::dto::stats::{
     LibrariesStatsDto, LibraryStatsDto, LibraryStatsTotalDto, NamedValueDto, ReadingActivityDto,
-    ReadingSummaryDto, ReadingTimeSeriesPointDto, ReadingTopsDto, ServerDiskStatsDto,
-    ServerProcessStatsDto, ServerStatsDto, ServerTaskStatsDto, ServerTotalsDto, TaskTypeStatsDto,
+    ReadingSummaryDto, ReadingTimeSeriesPointDto, ReadingTopsDto, SeriesValueDto,
+    ServerDiskStatsDto, ServerProcessStatsDto, ServerStatsDto, ServerTaskStatsDto, ServerTotalsDto,
+    TaskTypeStatsDto,
 };
 use crate::error::ApiError;
 use crate::service::metrics::TaskTypeMetrics;
@@ -296,8 +297,19 @@ async fn reading_tops(
     let genres = dao.genre_counts(user_id, &book_visibility)?;
     let tags = dao.tag_counts(user_id, &book_visibility)?;
     let authors = dao.author_counts(user_id, &book_visibility)?;
+    let series = dao
+        .series_counts(user_id, &book_visibility, 10)?
+        .into_iter()
+        .map(|s| SeriesValueDto {
+            series_id: s.series_id,
+            name: s.title,
+            value: s.read,
+            total: s.total,
+        })
+        .collect();
 
     Ok(Json(ReadingTopsDto {
+        top_series: series,
         top_authors: top(&authors, 10),
         top_genres: top(&genres, 10),
         top_tags: top(&tags, 10),
@@ -538,6 +550,22 @@ mod tests {
             .collect()
     }
 
+    fn series_values(body: &serde_json::Value) -> Vec<(String, String, i64, i64)> {
+        body["topSeries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| {
+                (
+                    e["seriesId"].as_str().unwrap().to_string(),
+                    e["name"].as_str().unwrap().to_string(),
+                    e["value"].as_i64().unwrap(),
+                    e["total"].as_i64().unwrap(),
+                )
+            })
+            .collect()
+    }
+
     /// s1 (l1): b1 completed with events, b2 in progress. s2 (l1): b3 completed without
     /// events, b4 unread.
     fn seed_full(db: &Database, kmrs_db: &Database, user: &str, today: Date) {
@@ -695,6 +723,14 @@ mod tests {
 
         let (status, body) = app.get_json("/api/v1/stats/reading/tops", "k").await;
         assert_eq!(status, StatusCode::OK);
+        // one completed book each; the in-progress b2 and unread b4 only count toward totals
+        assert_eq!(
+            series_values(&body),
+            [
+                ("s1".to_string(), "s1".to_string(), 1, 2),
+                ("s2".to_string(), "s2".to_string(), 1, 2),
+            ]
+        );
         assert_eq!(
             named_values(&body, "topGenres"),
             [("action".to_string(), 1), ("drama".to_string(), 1)]
@@ -820,6 +856,53 @@ mod tests {
             named_values(&body, "topGenres"),
             [("action".to_string(), 1)]
         );
+        assert_eq!(
+            series_values(&body),
+            [("s1".to_string(), "s1".to_string(), 1, 1)]
+        );
+    }
+
+    #[tokio::test]
+    async fn top_series_rank_completed_books_without_any_metadata() {
+        let (app, user) = user_app();
+        let today = now_utc().date();
+        let db = &app.state.db;
+        // no genres, tags or authors anywhere: only the series ranking is filled
+        for (series, read, unread) in [("sa", 1, 0), ("sb", 3, 2), ("sc", 0, 4), ("sd", 1, 1)] {
+            seed_series(db, series, "l1", None);
+            for i in 0..read + unread {
+                let book = format!("{series}-{i}");
+                seed_book(db, &book, series, "l1", 10);
+                if i < read {
+                    seed_progress(db, &book, &user, 10, true, at(today, 8));
+                } else if i == read {
+                    // in progress: counts toward the total, not the read count
+                    seed_progress(db, &book, &user, 3, false, at(today, 9));
+                }
+            }
+        }
+        for i in 0..11 {
+            let series = format!("z{i:02}");
+            let book = format!("{series}-0");
+            seed_series(db, &series, "l1", None);
+            seed_book(db, &book, &series, "l1", 10);
+            seed_progress(db, &book, &user, 10, true, at(today, 8));
+        }
+
+        let (status, body) = app.get_json("/api/v1/stats/reading/tops", "k").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(named_values(&body, "topAuthors").is_empty());
+        assert!(named_values(&body, "topGenres").is_empty());
+        assert!(named_values(&body, "topTags").is_empty());
+        let top = series_values(&body);
+        // capped at 10; ties order by title, and sc (nothing completed) never appears
+        assert_eq!(top.len(), 10);
+        assert_eq!(top[0], ("sb".to_string(), "sb".to_string(), 3, 5));
+        assert_eq!(top[1], ("sa".to_string(), "sa".to_string(), 1, 1));
+        assert_eq!(top[2], ("sd".to_string(), "sd".to_string(), 1, 2));
+        assert_eq!(top[3].0, "z00");
+        assert_eq!(top[9].0, "z06");
+        assert!(top.iter().all(|(id, ..)| id != "sc"));
     }
 
     #[tokio::test]

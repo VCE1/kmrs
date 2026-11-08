@@ -47,10 +47,12 @@
   },
   "tops": {
     "title": "最常閱讀",
+    "seriesHeading": "系列",
     "authors": "作者",
     "genres": "類型",
     "tags": "標籤",
     "series_other": "{{count}} 個系列",
-    "empty": "讀完幾本書後，這裡會顯示你最常閱讀的作者、類型與標籤。"
+    "booksOfTotal_other": "已讀 {{read}} / 共 {{count}} 本",
+    "empty": "讀完幾本書後，這裡會顯示你最常閱讀的系列、作者、類型與標籤。"
   }
 }

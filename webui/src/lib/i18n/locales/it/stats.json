@@ -55,12 +55,16 @@
   },
   "tops": {
     "title": "Più letti",
+    "seriesHeading": "Serie",
     "authors": "Autori",
     "genres": "Generi",
     "tags": "Tag",
     "series_one": "{{count}} serie",
     "series_many": "{{count}} serie",
     "series_other": "{{count}} serie",
-    "empty": "Finisci qualche libro per vedere i tuoi autori, generi e tag più letti."
+    "booksOfTotal_one": "{{read}} di {{count}} libro",
+    "booksOfTotal_many": "{{read}} di {{count}} libri",
+    "booksOfTotal_other": "{{read}} di {{count}} libri",
+    "empty": "Finisci qualche libro per vedere le tue serie, i tuoi autori, generi e tag più letti."
   }
 }

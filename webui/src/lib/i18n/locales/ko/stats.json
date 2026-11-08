@@ -47,10 +47,12 @@
   },
   "tops": {
     "title": "가장 많이 읽은",
+    "seriesHeading": "시리즈",
     "authors": "작가",
     "genres": "장르",
     "tags": "태그",
     "series_other": "시리즈 {{count}}개",
-    "empty": "책을 다 읽으면 가장 많이 읽은 작가, 장르, 태그가 표시됩니다."
+    "booksOfTotal_other": "{{count}}권 중 {{read}}권",
+    "empty": "책을 다 읽으면 가장 많이 읽은 시리즈, 작가, 장르, 태그가 표시됩니다."
   }
 }

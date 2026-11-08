@@ -47,10 +47,12 @@
   },
   "tops": {
     "title": "最も読んだもの",
+    "seriesHeading": "シリーズ",
     "authors": "著者",
     "genres": "ジャンル",
     "tags": "タグ",
     "series_other": "{{count}} シリーズ",
-    "empty": "本を読了すると、最も読んだ著者、ジャンル、タグがここに表示されます。"
+    "booksOfTotal_other": "{{count}} 冊中 {{read}} 冊",
+    "empty": "本を読了すると、最も読んだシリーズ、著者、ジャンル、タグがここに表示されます。"
   }
 }

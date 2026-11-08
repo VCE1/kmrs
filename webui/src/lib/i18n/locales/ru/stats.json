@@ -59,6 +59,7 @@
   },
   "tops": {
     "title": "Чаще всего читаемое",
+    "seriesHeading": "Серии",
     "authors": "Авторы",
     "genres": "Жанры",
     "tags": "Теги",
@@ -66,6 +67,10 @@
     "series_few": "{{count}} серии",
     "series_many": "{{count}} серий",
     "series_other": "{{count}} серии",
-    "empty": "Прочитайте несколько книг, чтобы увидеть самых читаемых авторов, жанры и теги."
+    "booksOfTotal_one": "{{read}} из {{count}} книги",
+    "booksOfTotal_few": "{{read}} из {{count}} книг",
+    "booksOfTotal_many": "{{read}} из {{count}} книг",
+    "booksOfTotal_other": "{{read}} из {{count}} книги",
+    "empty": "Прочитайте несколько книг, чтобы увидеть самые читаемые серии, авторов, жанры и теги."
   }
 }

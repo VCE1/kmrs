@@ -1363,6 +1363,12 @@ export interface NamedValueDto {
   value: number
 }
 
+/** A top-series entry: `value` completed books out of the series' `total` visible books. */
+export interface SeriesValueDto extends NamedValueDto {
+  seriesId: string
+  total: number
+}
+
 export interface ReadingSummaryDto {
   totalBooks: number
   booksStarted: number
@@ -1396,6 +1402,7 @@ export interface ReadingActivityDto {
 }
 
 export interface ReadingTopsDto {
+  topSeries: SeriesValueDto[]
   topAuthors: NamedValueDto[]
   topGenres: NamedValueDto[]
   topTags: NamedValueDto[]
