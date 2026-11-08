@@ -120,6 +120,16 @@ pub(crate) fn test_state_with_thumbnail_storage(
     AppState { config, ..state }
 }
 
+/// A test state with `[libraries] allow-file-deletion = false`.
+#[cfg(test)]
+pub(crate) fn test_state_without_file_deletion(state: AppState) -> AppState {
+    let config = Arc::new(crate::config::ServerConfig {
+        allow_file_deletion: false,
+        ..(*state.config).clone()
+    });
+    AppState { config, ..state }
+}
+
 impl AppState {
     /// A clone of the state whose `db` points at the dedicated task pools.
     /// Background task execution (scan / analyze / hash / convert / maintenance)

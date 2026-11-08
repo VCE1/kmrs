@@ -134,10 +134,12 @@ pub struct FileBooks {
     pub epub_divina_letter_count_threshold: Option<usize>,
 }
 
-/// Only consulted when database migrations run (fresh or upgraded data directory).
+/// `allow-file-deletion` applies at runtime; the other keys are only consulted when database
+/// migrations run (fresh or upgraded data directory).
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FileLibraries {
+    pub allow_file_deletion: Option<bool>,
     pub file_hashing: Option<bool>,
     pub scan_on_startup: Option<bool>,
     pub delete_empty_collections: Option<bool>,
@@ -427,7 +429,18 @@ pub fn render(file: &FileConfig, config: &ServerConfig, source: Option<&Path>) -
     let flibraries = file.libraries.as_ref();
     out.push_str("[libraries]\n");
     out.push_str(
-        "# only consulted when database migrations run (fresh or upgraded data directory)\n",
+        "# false makes deleting book files and duplicate pages fail with an error (kmrs enhancement)\n",
+    );
+    push_line(
+        &mut out,
+        flibraries.and_then(|l| l.allow_file_deletion).is_some(),
+        format!(
+            "allow-file-deletion = {} # env: KOMGA_LIBRARIES_ALLOWFILEDELETION",
+            config.allow_file_deletion
+        ),
+    );
+    out.push_str(
+        "# the keys below are only consulted when database migrations run (fresh or upgraded data directory)\n",
     );
     push_line(
         &mut out,

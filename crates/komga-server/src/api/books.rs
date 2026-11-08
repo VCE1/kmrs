@@ -2133,6 +2133,7 @@ async fn delete_book_file(
     Path(book_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     auth.0.require_admin()?;
+    ApiError::require_file_deletion_allowed(&state.config)?;
     state.task_emitter.delete_book(&book_id, HIGHEST_PRIORITY)?;
     Ok(StatusCode::ACCEPTED)
 }
@@ -4012,6 +4013,42 @@ mod tests {
     // endregion
 
     // region M4 write endpoints
+
+    #[tokio::test]
+    async fn delete_file_refused_when_file_deletion_disabled() {
+        let state = crate::state::test_state_without_file_deletion(test_state_with_settings());
+        let db = state.db.clone();
+        seed_library(&db, "l1");
+        seed_series(&db, "s1", "l1");
+        seed_book(&db, "b1", "s1", "l1", "file:/data/b1.cbz");
+        seed_user(&db, "admin@example.org", "pw", true);
+        seed_user(&db, "user@example.org", "pw", false);
+        let app = test_router(state.clone());
+
+        let admin = basic("admin@example.org", "pw");
+        let (status, _, body) =
+            call(&app, "DELETE", "/api/v1/books/b1/file", Some(&admin), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(
+            json(&body)["message"]
+                .as_str()
+                .unwrap()
+                .contains("allow-file-deletion = false"),
+            "{}",
+            json(&body)
+        );
+        let tasks = komga_db::dao::tasks::TasksDao::new(state.tasks_db.clone())
+            .find_all()
+            .unwrap();
+        assert!(tasks.is_empty(), "{tasks:?}");
+
+        // the admin check still comes first
+        let user = basic("user@example.org", "pw");
+        let (status, _, body) =
+            call(&app, "DELETE", "/api/v1/books/b1/file", Some(&user), None).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(!String::from_utf8_lossy(&body).contains("allow-file-deletion"));
+    }
 
     #[tokio::test]
     async fn book_analyze_and_refresh_and_delete_file() {

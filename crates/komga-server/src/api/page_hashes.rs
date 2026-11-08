@@ -189,6 +189,7 @@ async fn delete_duplicate_pages_by_page_hash(
     Path(page_hash): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     auth.0.require_admin()?;
+    ApiError::require_file_deletion_allowed(&state.config)?;
     let matches = dao(&state)
         .find_matches_by_hash_paged(
             &page_hash,
@@ -221,6 +222,7 @@ async fn delete_single_match_by_page_hash(
     Json(body): Json<PageHashMatchDto>,
 ) -> Result<StatusCode, ApiError> {
     auth.0.require_admin()?;
+    ApiError::require_file_deletion_allowed(&state.config)?;
     let page = BookPageNumbered {
         file_name: body.file_name,
         media_type: body.media_type,
@@ -459,6 +461,45 @@ mod tests {
         };
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert!(json["violations"].is_array());
+    }
+
+    #[tokio::test]
+    async fn page_removal_refused_when_file_deletion_disabled() {
+        let state = crate::state::test_state_without_file_deletion(test_state());
+        seed_admin(&state);
+        seed_book_pages(&state.db, "b1", "duphash", 2);
+
+        let (status, _, body) = call(
+            &state,
+            router(),
+            Request::post("/api/v1/page-hashes/duphash/delete-all")
+                .header("X-API-Key", "k")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(String::from_utf8_lossy(&body).contains("allow-file-deletion = false"));
+
+        let match_body = serde_json::json!({
+            "bookId": "b1", "url": "x", "pageNumber": 2, "fileName": "p1.jpg",
+            "fileSize": 1024, "mediaType": "image/jpeg"
+        });
+        let (status, _, body) = call(
+            &state,
+            router(),
+            Request::post("/api/v1/page-hashes/duphash/delete-match")
+                .header("X-API-Key", "k")
+                .header("Content-Type", "application/json")
+                .body(Body::from(match_body.to_string()))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert!(String::from_utf8_lossy(&body).contains("allow-file-deletion = false"));
+
+        let tasks = TasksDao::new(state.tasks_db.clone()).find_all().unwrap();
+        assert!(tasks.is_empty(), "{tasks:?}");
     }
 
     #[tokio::test]

@@ -43,6 +43,10 @@ pub(crate) fn io_error(
     ))
 }
 
+/// Shown when `[libraries] allow-file-deletion = false` refuses an API call or a queued task.
+pub(crate) const FILE_DELETION_DISABLED: &str =
+    "File deletion is disabled in the server configuration (allow-file-deletion = false)";
+
 pub(crate) fn remove_file_if_exists(
     action: &str,
     path: &std::path::Path,

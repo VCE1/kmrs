@@ -489,6 +489,14 @@ pub(crate) fn dispatch_task(state: &AppState, task: &Task) -> anyhow::Result<()>
             Ok(())
         }
         Task::FindDuplicatePagesToDelete(t) => {
+            if !state.config.allow_file_deletion {
+                tracing::info!(
+                    "Not removing duplicate pages for library {}: {}",
+                    t.library_id,
+                    crate::service::FILE_DELETION_DISABLED
+                );
+                return Ok(());
+            }
             let Some(library) = LibraryDao::new(state.db.clone()).find_by_id(&t.library_id)? else {
                 tracing::warn!(
                     "Cannot execute task {}: Library does not exist",
@@ -539,6 +547,9 @@ pub(crate) fn dispatch_task(state: &AppState, task: &Task) -> anyhow::Result<()>
             Ok(())
         }
         Task::RemoveHashedPages(t) => {
+            if !state.config.allow_file_deletion {
+                anyhow::bail!(crate::service::FILE_DELETION_DISABLED);
+            }
             let Some(book) = BookDao::new(state.db.clone()).find_by_id(&t.book_id)? else {
                 tracing::warn!(
                     "Cannot execute task {}: Book does not exist",
@@ -582,6 +593,10 @@ pub(crate) fn dispatch_task(state: &AppState, task: &Task) -> anyhow::Result<()>
             Ok(())
         }
         Task::DeleteBook(t) => {
+            // fails rather than skips, so the outcome reports the file as not deleted
+            if !state.config.allow_file_deletion {
+                anyhow::bail!(crate::service::FILE_DELETION_DISABLED);
+            }
             // Kotlin's DeleteBook branch has no warn log for a missing book
             let Some(book) = BookDao::new(state.db.clone()).find_by_id(&t.book_id)? else {
                 return Ok(());
@@ -590,6 +605,9 @@ pub(crate) fn dispatch_task(state: &AppState, task: &Task) -> anyhow::Result<()>
             Ok(())
         }
         Task::DeleteSeries(t) => {
+            if !state.config.allow_file_deletion {
+                anyhow::bail!(crate::service::FILE_DELETION_DISABLED);
+            }
             let Some(series) = SeriesDao::new(state.db.clone()).find_by_id(&t.series_id)? else {
                 return Ok(());
             };
@@ -1296,6 +1314,55 @@ mod tests {
             )
             .unwrap();
         assert_eq!(history, 1);
+    }
+
+    #[test]
+    fn file_deletion_tasks_refused_when_disabled() {
+        let state = crate::state::test_state_without_file_deletion(series_tests::test_state());
+        let dir = tempfile::tempdir().unwrap();
+        let root = format!("file:{}/", dir.path().display());
+        let file = dir.path().join("v01.cbz");
+        std::fs::write(&file, b"x").unwrap();
+        seed_library(&state.db, &test_library("lib-d", &root));
+        seed_series_at(&state.db, "lib-d", "s1", &root);
+        let book = seed_book(
+            &state.db,
+            "lib-d",
+            "s1",
+            &format!("file:{}", file.display()),
+        );
+
+        // queued before the switch was turned off: fail instead of deleting
+        for task in [
+            Task::book(BookTaskKind::DeleteBook, &book.id, DEFAULT_PRIORITY, None),
+            Task::series(SeriesTaskKind::DeleteSeries, "s1", DEFAULT_PRIORITY),
+            Task::RemoveHashedPages(komga_core::task::RemoveHashedPages {
+                book_id: book.id.clone(),
+                pages: vec![],
+                priority: DEFAULT_PRIORITY,
+                group_id: None,
+                unique_id: String::new(),
+            }),
+        ] {
+            let err = dispatch_task(&state, &task).unwrap_err();
+            assert!(
+                err.to_string().contains("allow-file-deletion = false"),
+                "{err}"
+            );
+        }
+        assert!(file.exists());
+
+        // automatic duplicate page removal queues nothing
+        dispatch_task(
+            &state,
+            &Task::library(
+                LibraryTaskKind::FindDuplicatePagesToDelete,
+                "lib-d",
+                DEFAULT_PRIORITY,
+            ),
+        )
+        .unwrap();
+        assert!(task_ids(&state).is_empty());
     }
 
     #[test]

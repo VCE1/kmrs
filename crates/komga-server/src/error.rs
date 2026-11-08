@@ -53,6 +53,15 @@ impl ApiError {
         }
     }
 
+    /// 403 unless `[libraries] allow-file-deletion` permits deleting files from the library.
+    pub fn require_file_deletion_allowed(config: &crate::config::ServerConfig) -> Result<(), Self> {
+        if config.allow_file_deletion {
+            Ok(())
+        } else {
+            Err(Self::forbidden(crate::service::FILE_DELETION_DISABLED))
+        }
+    }
+
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::Status {
             status: StatusCode::FORBIDDEN,

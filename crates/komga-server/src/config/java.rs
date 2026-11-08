@@ -227,6 +227,8 @@ impl JavaConfig {
                 epub_divina_letter_count_threshold: komga.epub_divina_letter_count_threshold,
             });
             file.libraries = Some(FileLibraries {
+                // no Komga equivalent
+                allow_file_deletion: None,
                 file_hashing: komga.file_hashing,
                 scan_on_startup: komga.libraries_scan_startup,
                 delete_empty_collections: komga.delete_empty_collections,

@@ -58,7 +58,9 @@
 # epub-divina-letter-count-threshold = 15 # env: KOMGA_EPUBDIVINALETTERCOUNTTHRESHOLD
 
 [libraries]
-# only consulted when database migrations run (fresh or upgraded data directory)
+# false makes deleting book files and duplicate pages fail with an error (kmrs enhancement)
+# allow-file-deletion = true # env: KOMGA_LIBRARIES_ALLOWFILEDELETION
+# the keys below are only consulted when database migrations run (fresh or upgraded data directory)
 # file-hashing = true # env: KOMGA_FILEHASHING
 # scan-on-startup = false # env: KOMGA_LIBRARIESSCANSTARTUP
 # delete-empty-collections = true # env: KOMGA_DELETEEMPTYCOLLECTIONS

@@ -992,6 +992,7 @@ async fn delete_series_file(
     Path(series_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     auth.0.require_admin()?;
+    ApiError::require_file_deletion_allowed(&state.config)?;
     state
         .task_emitter
         .delete_series(&series_id, HIGHEST_PRIORITY)?;
@@ -1118,6 +1119,7 @@ mod tests {
             komf_auth_key: None,
             history_retention_days: 180,
             update_check_enabled: true,
+            allow_file_deletion: true,
             log_level: None,
             sort_locale: None,
             thumbnail_storage: Default::default(),
@@ -2199,6 +2201,29 @@ mod tests {
             .unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn series_delete_file_refused_when_file_deletion_disabled() {
+        let state = crate::state::test_state_without_file_deletion(test_state());
+        admin(&state);
+        seed_library(&state, "lib1", "Library One");
+        seed_series(&state, "s1", "lib1", "Berserk");
+        let app = test_app(&state);
+
+        let request = Request::delete("/api/v1/series/s1/file")
+            .header("X-API-Key", ADMIN_KEY)
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body = String::from_utf8(body_bytes(response).await).unwrap();
+        assert!(body.contains("allow-file-deletion = false"), "{body}");
+
+        let tasks = komga_db::dao::tasks::TasksDao::new(state.tasks_db.clone())
+            .find_all()
+            .unwrap();
+        assert!(tasks.is_empty(), "{tasks:?}");
     }
 
     // region metadata PATCH

@@ -79,6 +79,9 @@ pub struct ServerConfig {
     pub history_retention_days: u32,
     /// daily GitHub check for a newer release, exposed at /api/v1/update-check (kmrs enhancement)
     pub update_check_enabled: bool,
+    /// false refuses deleting book/series files and duplicate pages, from the API and from queued
+    /// or automatic tasks (kmrs enhancement)
+    pub allow_file_deletion: bool,
     /// log filter from `[logging] level`, in RUST_LOG syntax; RUST_LOG still wins when set
     /// (kmrs enhancement). None = the built-in default
     pub log_level: Option<String>,
@@ -436,6 +439,12 @@ impl ServerConfig {
                 .or_else(|| {
                     file.and_then(|f| f.update_check.as_ref())
                         .and_then(|u| u.enabled)
+                })
+                .unwrap_or(true),
+            allow_file_deletion: env_bool(env, "KOMGA_LIBRARIES_ALLOWFILEDELETION")
+                .or_else(|| {
+                    file.and_then(|f| f.libraries.as_ref())
+                        .and_then(|l| l.allow_file_deletion)
                 })
                 .unwrap_or(true),
             log_level: file
@@ -1293,6 +1302,33 @@ issuer-uri = "https://github.com"
     }
 
     #[test]
+    fn allow_file_deletion_default_file_and_env() {
+        let config = resolve("", Cli::default(), &[]);
+        assert!(config.allow_file_deletion);
+
+        let config = resolve(
+            "[libraries]\nallow-file-deletion = false\n",
+            Cli::default(),
+            &[],
+        );
+        assert!(!config.allow_file_deletion);
+
+        // env var wins over the file
+        let config = resolve(
+            "[libraries]\nallow-file-deletion = false\n",
+            Cli::default(),
+            &env(&[("KOMGA_LIBRARIES_ALLOWFILEDELETION", "true")]),
+        );
+        assert!(config.allow_file_deletion);
+        let config = resolve(
+            "",
+            Cli::default(),
+            &env(&[("KOMGA_LIBRARIES_ALLOWFILEDELETION", "false")]),
+        );
+        assert!(!config.allow_file_deletion);
+    }
+
+    #[test]
     fn thumbnail_deep_etag_default_file_and_env() {
         let config = resolve("", Cli::default(), &[]);
         assert!(config.thumbnail_deep_etag);
@@ -1400,6 +1436,9 @@ storage = "file"
         let text = std::fs::read_to_string(&written).unwrap();
         // defaults are commented out; only explicit overrides are written live
         assert!(text.contains("# port = 25600"));
+        assert!(
+            text.contains("# allow-file-deletion = true # env: KOMGA_LIBRARIES_ALLOWFILEDELETION")
+        );
         let parsed: FileConfig = toml::from_str(&text).unwrap();
         let reparsed = ServerConfig::resolve(Some(&parsed), &cli, &[]).unwrap();
         assert_eq!(reparsed.port, 25600);
