@@ -782,6 +782,7 @@ async fn get_on_deck(
             &user.id,
             user.get_authorized_library_ids(None).as_ref(),
             &user.restrictions,
+            state.settings.get().recent_reading_since(),
             &page_request(query.pageable.page, query.pageable.size, vec![]),
         )?;
 

@@ -145,13 +145,21 @@
     "unsaved_other": "{{count}} modifiche non salvate",
     "discard": "Scarta",
     "fixInvalid": "Correggi i campi non validi sopra per salvare.",
-    "saveFailed": "Impossibile salvare le impostazioni."
+    "saveFailed": "Impossibile salvare le impostazioni.",
+    "recentReadingDays": "Periodo di lettura recente",
+    "recentReadingDaysHelper": "Continua a leggere e In coda mostrano solo le serie lette in questo periodo."
   },
   "thumbnail": {
     "default": "Predefinita",
     "medium": "Media",
     "large": "Grande",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} giorno",
+    "days_many": "{{count}} giorni",
+    "days_other": "{{count}} giorni",
+    "off": "Disattivato"
   },
   "rotateKey": {
     "button": "Ruota chiave «Ricordami»",

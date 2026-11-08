@@ -32,10 +32,13 @@ pub struct SettingsDto {
     /// kmrs enhancement; non-admins see it too so clients can follow it offline
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skip_read_on_next: Option<bool>,
+    /// kmrs: Keep Reading and On Deck only show series read in the last N days; 0 = off
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recent_reading_days: Option<i64>,
 }
 impl SettingsDto {
     /// `SettingsDto.public()`: non-admin users see the upload size limit, plus kmrs's
-    /// skip-read setting
+    /// skip-read setting and recent reading window, so every client follows them the same way
     pub fn public(self) -> Self {
         Self {
             delete_empty_collections: None,
@@ -49,6 +52,7 @@ impl SettingsDto {
             kepubify_path: None,
             max_upload_file_size_bytes: self.max_upload_file_size_bytes,
             skip_read_on_next: self.skip_read_on_next,
+            recent_reading_days: self.recent_reading_days,
         }
     }
 }
@@ -131,4 +135,6 @@ pub struct SettingsUpdateDto {
     /// kmrs enhancement
     #[serde(deserialize_with = "loose_bool_opt")]
     pub skip_read_on_next: Option<bool>,
+    #[serde(deserialize_with = "loose_i64_opt")]
+    pub recent_reading_days: Option<i64>,
 }

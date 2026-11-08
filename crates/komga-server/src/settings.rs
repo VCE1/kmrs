@@ -14,6 +14,7 @@ const KEY_TASK_POOL_SIZE: &str = "TASK_POOL_SIZE";
 const KEY_KOBO_PROXY: &str = "KOBO_PROXY";
 /// kmrs-only; the `KMRS_` prefix keeps it clear of Komga's keys, which the Java version reads one by one
 pub(crate) const KEY_NEXT_SKIP_READ: &str = "KMRS_NEXT_SKIP_READ";
+pub(crate) const KEY_RECENT_READING_DAYS: &str = "KMRS_RECENT_READING_DAYS";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThumbnailSize {
@@ -64,6 +65,18 @@ pub struct KomgaSettings {
     pub kobo_proxy: bool,
     /// the next-book endpoints skip books the user has already read (kmrs enhancement)
     pub next_skip_read: bool,
+    /// Keep Reading and On Deck only show series read in the last N days; 0 = off.
+    pub recent_reading_days: u32,
+}
+
+impl KomgaSettings {
+    /// Lower bound for On Deck's most recent read date, or None when the window is off.
+    pub fn recent_reading_since(&self) -> Option<time::OffsetDateTime> {
+        (self.recent_reading_days > 0).then(|| {
+            komga_core::time_codec::now_utc()
+                - time::Duration::days(i64::from(self.recent_reading_days))
+        })
+    }
 }
 
 pub struct SettingsProvider {
@@ -101,6 +114,10 @@ impl SettingsProvider {
                 task_pool_size: dao.get_setting_i64(KEY_TASK_POOL_SIZE)?.unwrap_or(2).max(0) as u32,
                 kobo_proxy: dao.get_setting_bool(KEY_KOBO_PROXY)?.unwrap_or(false),
                 next_skip_read: dao.get_setting_bool(KEY_NEXT_SKIP_READ)?.unwrap_or(false),
+                recent_reading_days: dao
+                    .get_setting_i64(KEY_RECENT_READING_DAYS)?
+                    .unwrap_or(0)
+                    .clamp(0, i64::from(u32::MAX)) as u32,
             })
         };
         let inner = read().expect("failed to load server settings");

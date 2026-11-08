@@ -125,13 +125,19 @@
     "unsaved_other": "{{count}} 件の未保存の変更",
     "discard": "破棄",
     "fixInvalid": "上の無効なフィールドを修正してから保存してください。",
-    "saveFailed": "設定を保存できませんでした。"
+    "saveFailed": "設定を保存できませんでした。",
+    "recentReadingDays": "最近の読書の期間",
+    "recentReadingDaysHelper": "「続きを読む」と「次に読む」には、この期間内に読んだシリーズのみ表示されます。"
   },
   "thumbnail": {
     "default": "デフォルト",
     "medium": "中",
     "large": "大",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_other": "{{count}}日",
+    "off": "オフ"
   },
   "rotateKey": {
     "button": "ログイン保持キーを再生成",

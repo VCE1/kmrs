@@ -125,13 +125,19 @@
     "unsaved_other": "{{count}} 项未保存的更改",
     "discard": "放弃",
     "fixInvalid": "请先修正上方无效的字段再保存。",
-    "saveFailed": "无法保存设置。"
+    "saveFailed": "无法保存设置。",
+    "recentReadingDays": "近期阅读时间范围",
+    "recentReadingDaysHelper": "“继续阅读”和“待阅读”只显示在此期间内阅读过的系列。"
   },
   "thumbnail": {
     "default": "默认",
     "medium": "中",
     "large": "大",
     "xlarge": "特大"
+  },
+  "recentReading": {
+    "days_other": "{{count}} 天",
+    "off": "关闭"
   },
   "rotateKey": {
     "button": "轮换「记住我」密钥",

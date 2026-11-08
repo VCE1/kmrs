@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { settingsApi } from '@/lib/api/settings'
 import type { SettingsDto, SettingsUpdateDto, ThumbnailSize } from '@/lib/api/types'
 import { useChanged } from '@/lib/hooks/useChanged'
+import { SERVER_SETTINGS_KEY } from '@/lib/hooks/useRecentReadingDays'
 import { Button } from '@/components/ui/Button'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Switch } from '@/components/ui/Switch'
@@ -13,6 +14,8 @@ import { computeChanges, draftFromSettings, validateDraft, type SettingsDraft } 
 import { FieldInput } from './FieldInput'
 import { RegenerateThumbnailsDialog } from './RegenerateThumbnailsDialog'
 import { RotateKeyButton } from './RotateKeyButton'
+
+const RECENT_READING_DAYS = ['30', '90', '180', '0']
 
 const THUMBNAIL_OPTIONS: Array<{ value: ThumbnailSize; labelKey: string }> = [
   { value: 'DEFAULT', labelKey: 'thumbnail.default' },
@@ -51,6 +54,10 @@ export function SettingsForm({ settings }: { settings: SettingsDto }) {
     mutationFn: (body: SettingsUpdateDto) => settingsApi.update(body),
     onSuccess: (_data, body) => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] })
+      if (body.recentReadingDays !== undefined) {
+        queryClient.invalidateQueries({ queryKey: SERVER_SETTINGS_KEY })
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      }
       // existing books keep their old thumbnails, so a size change is a no-op without regeneration
       if (body.thumbnailSize) setRegenerateOpen(true)
     },
@@ -65,6 +72,14 @@ export function SettingsForm({ settings }: { settings: SettingsDto }) {
   }
 
   const thumbnailOptions = THUMBNAIL_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))
+  // a value set through the API that isn't a preset still shows as selected
+  const recentReadingOptions = [
+    ...RECENT_READING_DAYS,
+    ...(RECENT_READING_DAYS.includes(draft.recentReadingDays) ? [] : [draft.recentReadingDays]),
+  ].map((value) => ({
+    value,
+    label: value === '0' ? t('recentReading.off') : t('recentReading.days', { count: Number(value) }),
+  }))
 
   return (
     <div className="space-y-6">
@@ -135,6 +150,13 @@ export function SettingsForm({ settings }: { settings: SettingsDto }) {
             checked={draft.skipReadOnNext}
             onCheckedChange={(v) => set('skipReadOnNext', v)}
             label={t('form.skipReadOnNext')}
+          />
+        </FormRow>
+        <FormRow label={t('form.recentReadingDays')} helper={t('form.recentReadingDaysHelper')}>
+          <SegmentedControl
+            options={recentReadingOptions}
+            value={draft.recentReadingDays}
+            onChange={(v) => set('recentReadingDays', v)}
           />
         </FormRow>
       </Section>

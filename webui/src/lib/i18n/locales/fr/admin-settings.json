@@ -145,13 +145,21 @@
     "unsaved_other": "{{count}} modifications non enregistrées",
     "discard": "Annuler",
     "fixInvalid": "Corrigez les champs invalides ci-dessus pour enregistrer.",
-    "saveFailed": "Impossible d'enregistrer les réglages."
+    "saveFailed": "Impossible d'enregistrer les réglages.",
+    "recentReadingDays": "Période de lecture récente",
+    "recentReadingDaysHelper": "Continuer la lecture et À lire ensuite n’affichent que les séries lues pendant cette période."
   },
   "thumbnail": {
     "default": "Par défaut",
     "medium": "Moyenne",
     "large": "Grande",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} jour",
+    "days_many": "{{count}} jours",
+    "days_other": "{{count}} jours",
+    "off": "Désactivé"
   },
   "rotateKey": {
     "button": "Rotation de la clé « Rester connecté »",

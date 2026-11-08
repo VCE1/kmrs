@@ -135,13 +135,20 @@
     "unsaved_other": "{{count}} ungespeicherte Änderungen",
     "discard": "Verwerfen",
     "fixInvalid": "Korrigiere die ungültigen Felder oben, um zu speichern.",
-    "saveFailed": "Einstellungen konnten nicht gespeichert werden."
+    "saveFailed": "Einstellungen konnten nicht gespeichert werden.",
+    "recentReadingDays": "Zeitraum für zuletzt Gelesenes",
+    "recentReadingDaysHelper": "Weiterlesen und Als Nächstes zeigen nur Serien, die in diesem Zeitraum gelesen wurden."
   },
   "thumbnail": {
     "default": "Standard",
     "medium": "Mittel",
     "large": "Groß",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "off": "Aus"
   },
   "rotateKey": {
     "button": "„Angemeldet bleiben“-Schlüssel rotieren",

@@ -145,13 +145,21 @@
     "unsaved_other": "{{count}} cambios sin guardar",
     "discard": "Descartar",
     "fixInvalid": "Corrige los campos no válidos de arriba para guardar.",
-    "saveFailed": "No se pudieron guardar los ajustes."
+    "saveFailed": "No se pudieron guardar los ajustes.",
+    "recentReadingDays": "Periodo de lectura reciente",
+    "recentReadingDaysHelper": "Seguir leyendo y A continuación solo muestran series leídas en este periodo."
   },
   "thumbnail": {
     "default": "Predeterminado",
     "medium": "Mediano",
     "large": "Grande",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} día",
+    "days_many": "{{count}} días",
+    "days_other": "{{count}} días",
+    "off": "Desactivado"
   },
   "rotateKey": {
     "button": "Rotar la clave de «Recuérdame»",

@@ -443,6 +443,7 @@ async fn get_books_on_deck(
         &auth.0.user.id,
         authorized.as_ref(),
         &auth.0.user.restrictions,
+        state.settings.get().recent_reading_since(),
         &to_page_request(&qp.pageable),
     )?;
     let items = restrict_books(result.items, &auth.0.user);
@@ -2873,6 +2874,87 @@ mod tests {
         let page = json(&body);
         assert_eq!(page["totalElements"], 1);
         assert_eq!(page["content"][0]["id"], "b2");
+    }
+
+    #[tokio::test]
+    async fn books_on_deck_recent_reading_window() {
+        let state = test_state_with_settings();
+        let db = state.db.clone();
+        seed_library(&db, "l1");
+        let user_id = seed_user(&db, "admin@example.org", "pw", true);
+        // s1 read today, s2 read 100 days ago; both have an unread second book
+        for (series, read, next, days_ago) in [("s1", "b1", "b2", 0), ("s2", "b3", "b4", 100)] {
+            seed_series(&db, series, "l1");
+            set_series_book_count(&db, series, 2);
+            seed_book_with(
+                &db,
+                read,
+                series,
+                "l1",
+                &format!("file:/data/{read}.cbz"),
+                1.0,
+            );
+            seed_book_with(
+                &db,
+                next,
+                series,
+                "l1",
+                &format!("file:/data/{next}.cbz"),
+                2.0,
+            );
+            let read_date = time_codec::now_utc() - time::Duration::days(days_ago);
+            read_progress_dao_for(&db)
+                .insert_or_update(&ReadProgress {
+                    book_id: read.into(),
+                    user_id: user_id.clone(),
+                    page: 10,
+                    completed: true,
+                    read_date,
+                    device_id: String::new(),
+                    device_name: String::new(),
+                    locator: None,
+                    created_date: read_date,
+                    last_modified_date: read_date,
+                })
+                .unwrap();
+        }
+        let app = test_router(state.clone());
+        let on_deck = || async {
+            let (status, _, body) = call(
+                &app,
+                "GET",
+                "/api/v1/books/ondeck",
+                Some(&basic("admin@example.org", "pw")),
+                None,
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            let page = json(&body);
+            let mut ids: Vec<String> = page["content"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|b| b["id"].as_str().unwrap().to_string())
+                .collect();
+            ids.sort();
+            ids
+        };
+
+        // off by default: both series
+        assert_eq!(on_deck().await, ["b2", "b4"]);
+
+        let settings = komga_db::dao::settings::SettingsDao::new(db.clone());
+        settings
+            .save_setting_i64("KMRS_RECENT_READING_DAYS", 30)
+            .unwrap();
+        state.settings.reload();
+        assert_eq!(on_deck().await, ["b2"]);
+
+        settings
+            .save_setting_i64("KMRS_RECENT_READING_DAYS", 180)
+            .unwrap();
+        state.settings.reload();
+        assert_eq!(on_deck().await, ["b2", "b4"]);
     }
 
     fn read_progress_dao_for(db: &Database) -> ReadProgressDao {

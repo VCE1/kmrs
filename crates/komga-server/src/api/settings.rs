@@ -15,6 +15,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/settings", routing::patch(update_server_settings))
 }
 
+/// Upper bound for `recentReadingDays` (ten years): larger windows behave like off anyway.
+const MAX_RECENT_READING_DAYS: u32 = 3650;
+
 /// Spring Boot's default `spring.servlet.multipart.max-file-size` (komga does not override it)
 const DEFAULT_MAX_FILE_SIZE_BYTES: i64 = 1_048_576;
 
@@ -55,6 +58,7 @@ async fn get_server_settings(
         }),
         max_upload_file_size_bytes: Some(DEFAULT_MAX_FILE_SIZE_BYTES),
         skip_read_on_next: Some(s.next_skip_read),
+        recent_reading_days: Some(i64::from(s.recent_reading_days)),
     };
     if auth.0.user.is_admin() {
         Json(dto)
@@ -79,6 +83,12 @@ async fn update_server_settings(
             "rememberMeDurationDays",
             "must be greater than 0",
         ));
+    }
+    if body
+        .recent_reading_days
+        .is_some_and(|v| !(0..=i64::from(MAX_RECENT_READING_DAYS)).contains(&v))
+    {
+        violations.push(violation("recentReadingDays", "must be between 0 and 3650"));
     }
     if !violations.is_empty() {
         return Err(ApiError::Violations(violations));
@@ -107,6 +117,9 @@ async fn update_server_settings(
     }
     if let Some(v) = body.skip_read_on_next {
         dao.save_setting_bool(crate::settings::KEY_NEXT_SKIP_READ, v)?;
+    }
+    if let Some(v) = body.recent_reading_days {
+        dao.save_setting_i64(crate::settings::KEY_RECENT_READING_DAYS, v)?;
     }
 
     state.settings.reload();
@@ -163,8 +176,9 @@ mod tests {
         assert_eq!(json["koboProxy"], false);
         assert_eq!(json["skipReadOnNext"], false);
         assert_eq!(json["maxUploadFileSizeBytes"], 1_048_576);
+        assert_eq!(json["recentReadingDays"], 0);
 
-        // non-admin: only maxUploadFileSizeBytes and skipReadOnNext survive
+        // non-admin: only maxUploadFileSizeBytes, skipReadOnNext and recentReadingDays survive
         insert_user(&state.db, "u@b.c", &[], &[], Default::default(), "u");
         let (status, json) = {
             let (s, _, b) = call(&state, router(), get("/api/v1/settings", "u")).await;
@@ -172,6 +186,7 @@ mod tests {
         };
         assert_eq!(status, StatusCode::OK);
         assert_eq!(json["maxUploadFileSizeBytes"], 1_048_576);
+        assert_eq!(json["recentReadingDays"], 0);
         assert!(json.get("taskPoolSize").is_none());
         assert!(json.get("serverPort").is_none());
         assert!(json.get("deleteEmptyCollections").is_none());
@@ -262,6 +277,65 @@ mod tests {
                 .as_deref(),
             Some("true")
         );
+    }
+
+    #[tokio::test]
+    async fn recent_reading_days_patch_validate_and_public() {
+        let state = test_state();
+        seed_admin(&state);
+        insert_user(&state.db, "u@b.c", &[], &[], Default::default(), "u");
+        let patch = |value: serde_json::Value| {
+            let state = state.clone();
+            async move {
+                let (status, _, _) = call(
+                    &state,
+                    router(),
+                    Request::patch("/api/v1/settings")
+                        .header("X-API-Key", "k")
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(
+                            serde_json::json!({ "recentReadingDays": value }).to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await;
+                status
+            }
+        };
+        let days = |api_key: &'static str| {
+            let state = state.clone();
+            async move {
+                let (_, _, b) = call(&state, router(), get("/api/v1/settings", api_key)).await;
+                serde_json::from_slice::<serde_json::Value>(&b).unwrap()["recentReadingDays"]
+                    .clone()
+            }
+        };
+
+        assert_eq!(patch(serde_json::json!(90)).await, StatusCode::NO_CONTENT);
+        assert_eq!(state.settings.get().recent_reading_days, 90);
+        assert!(state.settings.get().recent_reading_since().is_some());
+        assert_eq!(
+            SettingsDao::new(state.db.clone())
+                .get_setting_i64("KMRS_RECENT_READING_DAYS")
+                .unwrap(),
+            Some(90)
+        );
+        assert_eq!(days("k").await, 90);
+        // every client can read it
+        assert_eq!(days("u").await, 90);
+
+        assert_eq!(patch(serde_json::json!(-1)).await, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            patch(serde_json::json!(3651)).await,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(state.settings.get().recent_reading_days, 90);
+
+        // 0 turns it off
+        assert_eq!(patch(serde_json::json!(0)).await, StatusCode::NO_CONTENT);
+        assert_eq!(state.settings.get().recent_reading_days, 0);
+        assert!(state.settings.get().recent_reading_since().is_none());
+        assert_eq!(days("u").await, 0);
     }
 
     #[tokio::test]

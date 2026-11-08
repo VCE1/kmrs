@@ -15,6 +15,7 @@ import { DashboardRow, type PagedRowQuery } from '@/components/dashboard/Dashboa
 import { DASHBOARD_SECTIONS, type DashboardSectionKey } from '@/components/dashboard/sections'
 import { dashboardLibraryIds, dashboardScope, useDashboardSections } from '@/components/dashboard/sectionConfig'
 import { DashboardSectionsDialog } from '@/components/dashboard/DashboardSectionsDialog'
+import { useRecentReadingDays } from '@/lib/hooks/useRecentReadingDays'
 import { PinnedLibrariesEmpty } from '@/components/dashboard/PinnedLibrariesEmpty'
 import { PinLibrariesDialog } from '@/components/layout/PinLibrariesDialog'
 
@@ -33,8 +34,18 @@ function usePagedRow<T>(
   return { ...query, items: query.data?.pages.flatMap((p) => p.content) ?? [] }
 }
 
-function useSectionRow(key: DashboardSectionKey, libraryIds: string[] | undefined, scope: string, enabled: boolean) {
-  return usePagedRow(['dashboard', key, scope], (page) => DASHBOARD_SECTIONS[key].fetchPage(libraryIds, page), enabled)
+function useSectionRow(
+  key: DashboardSectionKey,
+  libraryIds: string[] | undefined,
+  scope: string,
+  recentReadingDays: number,
+  enabled: boolean,
+) {
+  return usePagedRow(
+    ['dashboard', key, scope, recentReadingDays],
+    (page) => DASHBOARD_SECTIONS[key].fetchPage(libraryIds, page, { recentReadingDays }),
+    enabled,
+  )
 }
 
 function ScopeButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
@@ -99,7 +110,8 @@ export function DashboardPage() {
   const libraryIds = dashboardLibraryIds(libraryId, pinned)
   const scope = dashboardScope(libraryId, pinned)
   const pinnedEmpty = !libraryId && pinned !== undefined && pinned.length === 0
-  const rowsEnabled = !settingsPending && !pinnedEmpty
+  const { days: recentReadingDays, isPending: readingWindowPending } = useRecentReadingDays()
+  const rowsEnabled = !settingsPending && !readingWindowPending && !pinnedEmpty
 
   const { sections } = useDashboardSections(libraryId)
   const [sectionsDialogOpen, setSectionsDialogOpen] = useState(false)
@@ -108,13 +120,13 @@ export function DashboardPage() {
   useDocumentTitle(libraryId ? library?.name : t('title'))
 
   const sectionQueries: Record<DashboardSectionKey, PagedRowQuery<BookDto | SeriesDto>> = {
-    'keep-reading': useSectionRow('keep-reading', libraryIds, scope, rowsEnabled),
-    'on-deck': useSectionRow('on-deck', libraryIds, scope, rowsEnabled),
-    'recently-released-books': useSectionRow('recently-released-books', libraryIds, scope, rowsEnabled),
-    'recently-added-books': useSectionRow('recently-added-books', libraryIds, scope, rowsEnabled),
-    'recently-added-series': useSectionRow('recently-added-series', libraryIds, scope, rowsEnabled),
-    'recently-updated-series': useSectionRow('recently-updated-series', libraryIds, scope, rowsEnabled),
-    'recently-read': useSectionRow('recently-read', libraryIds, scope, rowsEnabled),
+    'keep-reading': useSectionRow('keep-reading', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'on-deck': useSectionRow('on-deck', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'recently-released-books': useSectionRow('recently-released-books', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'recently-added-books': useSectionRow('recently-added-books', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'recently-added-series': useSectionRow('recently-added-series', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'recently-updated-series': useSectionRow('recently-updated-series', libraryIds, scope, recentReadingDays, rowsEnabled),
+    'recently-read': useSectionRow('recently-read', libraryIds, scope, recentReadingDays, rowsEnabled),
   }
 
   const visibleSections = sections.filter((s) => !s.hidden)

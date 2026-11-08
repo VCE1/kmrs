@@ -10,6 +10,8 @@ export interface SettingsDraft {
   taskPoolSize: string
   koboProxy: boolean
   skipReadOnNext: boolean
+  /** days as a string to match the segmented control; '0' = off */
+  recentReadingDays: string
 }
 
 export function draftFromSettings(s: SettingsDto): SettingsDraft {
@@ -21,6 +23,7 @@ export function draftFromSettings(s: SettingsDto): SettingsDraft {
     taskPoolSize: s.taskPoolSize?.toString() ?? '',
     koboProxy: s.koboProxy ?? false,
     skipReadOnNext: s.skipReadOnNext ?? false,
+    recentReadingDays: String(s.recentReadingDays ?? 0),
   }
 }
 
@@ -47,5 +50,6 @@ export function computeChanges(s: SettingsDto, d: SettingsDraft): SettingsUpdate
   if (d.taskPoolSize.trim() !== (s.taskPoolSize?.toString() ?? '')) changes.taskPoolSize = Number(d.taskPoolSize)
   if (d.koboProxy !== (s.koboProxy ?? false)) changes.koboProxy = d.koboProxy
   if (d.skipReadOnNext !== (s.skipReadOnNext ?? false)) changes.skipReadOnNext = d.skipReadOnNext
+  if (d.recentReadingDays !== String(s.recentReadingDays ?? 0)) changes.recentReadingDays = Number(d.recentReadingDays)
   return changes
 }

@@ -135,13 +135,20 @@
     "unsaved_other": "{{count}} unsaved changes",
     "discard": "Discard",
     "fixInvalid": "Fix the invalid fields above to save.",
-    "saveFailed": "Could not save settings."
+    "saveFailed": "Could not save settings.",
+    "recentReadingDays": "Recent reading window",
+    "recentReadingDaysHelper": "Keep Reading and On Deck only show series read within this period."
   },
   "thumbnail": {
     "default": "Default",
     "medium": "Medium",
     "large": "Large",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "off": "Off"
   },
   "rotateKey": {
     "button": "Rotate remember-me key",

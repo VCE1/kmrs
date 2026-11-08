@@ -125,13 +125,19 @@
     "unsaved_other": "저장되지 않은 변경 사항 {{count}}개",
     "discard": "버리기",
     "fixInvalid": "저장하려면 위의 잘못된 필드를 수정하세요.",
-    "saveFailed": "설정을 저장할 수 없습니다."
+    "saveFailed": "설정을 저장할 수 없습니다.",
+    "recentReadingDays": "최근 읽기 기간",
+    "recentReadingDaysHelper": "이어 읽기 및 다음 읽을 책에는 이 기간 안에 읽은 시리즈만 표시됩니다."
   },
   "thumbnail": {
     "default": "기본",
     "medium": "중간",
     "large": "크게",
     "xlarge": "특대"
+  },
+  "recentReading": {
+    "days_other": "{{count}}일",
+    "off": "끄기"
   },
   "rotateKey": {
     "button": "로그인 유지 키 교체",

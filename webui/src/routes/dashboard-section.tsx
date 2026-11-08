@@ -21,6 +21,7 @@ import { BooksSelectionBar } from '@/components/browse/BooksSelectionBar'
 import { SeriesSelectionBar } from '@/components/browse/SeriesSelectionBar'
 import { SelectionModeButton } from '@/components/selection/SelectionModeButton'
 import { cardSelection, useSelection } from '@/components/selection/useSelection'
+import { useRecentReadingDays } from '@/lib/hooks/useRecentReadingDays'
 
 export function DashboardSectionPage() {
   const { t } = useTranslation('dashboard')
@@ -44,13 +45,15 @@ export function DashboardSectionPage() {
 
   useDocumentTitle(section ? t(section.titleKey) : undefined)
 
+  const { days: recentReadingDays, isPending: readingWindowPending } = useRecentReadingDays()
+
   // same key+queryFn as the dashboard row, so the first pages come straight from cache
   const query = useInfiniteQuery({
-    enabled: !!section && !settingsPending && !pinnedEmpty,
-    queryKey: ['dashboard', sectionKey, scope],
+    enabled: !!section && !settingsPending && !readingWindowPending && !pinnedEmpty,
+    queryKey: ['dashboard', sectionKey, scope, recentReadingDays],
     queryFn: ({ pageParam }) => {
       if (!section) throw new Error(`unknown dashboard section: ${sectionKey}`)
-      return section.fetchPage(libraryIds, pageParam)
+      return section.fetchPage(libraryIds, pageParam, { recentReadingDays })
     },
     getNextPageParam: (last) => (last.last ? undefined : last.number + 1),
     initialPageParam: 0,
@@ -60,7 +63,8 @@ export function DashboardSectionPage() {
 
   const items = query.data?.pages.flatMap((p) => p.content) ?? []
   const loadedIds = items.map((item) => item.id)
-  const total = query.data?.pages[0]?.totalElements
+  // the last loaded page: a cut-off Keep Reading page carries the corrected total
+  const total = query.data?.pages.at(-1)?.totalElements
 
   return (
     <div>

@@ -165,6 +165,7 @@ fn add_on_deck(
         &user.id,
         filter.as_ref(),
         &user.restrictions,
+        state.settings.get().recent_reading_since(),
         &PageRequest {
             page: 0,
             size: 20,
@@ -419,3 +420,70 @@ pub fn take_read_lists_removed(
 }
 
 // endregion
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::collections::tests::{exec, seed_base, test_state};
+    use komga_db::dao::user::UserDao;
+
+    fn admin(state: &AppState) -> KomgaUser {
+        let id: String = state
+            .db
+            .ro()
+            .unwrap()
+            .query_row("SELECT ID FROM USER WHERE EMAIL = 'admin@x.y'", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        UserDao::new(state.db.clone())
+            .find_by_id(&id)
+            .unwrap()
+            .unwrap()
+    }
+
+    fn on_deck_shelf(state: &AppState, user: &KomgaUser) -> Vec<String> {
+        let sync_point = create_sync_point(state, user, None, None).unwrap();
+        SyncPointDao::new(state.db.clone())
+            .find_book_ids_by_readlist_ids(&sync_point.id, &[ON_DECK_ID.to_string()])
+            .unwrap()
+            .into_iter()
+            .map(|b| b.book_id)
+            .collect()
+    }
+
+    #[test]
+    fn on_deck_shelf_follows_recent_reading_window() {
+        let state = test_state();
+        seed_base(&state.db);
+        let user = admin(&state);
+        // b1 read, so series s1 is on deck with its next book; last read on 2021-06-01
+        exec(
+            &state.db,
+            "INSERT INTO READ_PROGRESS (BOOK_ID, USER_ID, PAGE, COMPLETED, READ_DATE, DEVICE_ID, DEVICE_NAME) \
+             VALUES ('b1', ?, 10, 1, '2021-06-01 00:00:00.0', '', '')",
+            rusqlite::params![user.id],
+        );
+        exec(
+            &state.db,
+            "INSERT INTO READ_PROGRESS_SERIES (SERIES_ID, USER_ID, READ_COUNT, IN_PROGRESS_COUNT, MOST_RECENT_READ_DATE) \
+             VALUES ('s1', ?, 1, 0, '2021-06-01 00:00:00.0')",
+            rusqlite::params![user.id],
+        );
+        let window_off = on_deck_shelf(&state, &user);
+        assert!(!window_off.is_empty());
+
+        komga_db::dao::settings::SettingsDao::new(state.db.clone())
+            .save_setting_i64("KMRS_RECENT_READING_DAYS", 30)
+            .unwrap();
+        state.settings.reload();
+        assert!(on_deck_shelf(&state, &user).is_empty());
+
+        exec(
+            &state.db,
+            "UPDATE READ_PROGRESS_SERIES SET MOST_RECENT_READ_DATE = ? WHERE SERIES_ID = 's1'",
+            rusqlite::params![time_codec::format_datetime(time_codec::now_utc())],
+        );
+        assert_eq!(on_deck_shelf(&state, &user), window_off);
+    }
+}

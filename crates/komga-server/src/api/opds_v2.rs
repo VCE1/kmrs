@@ -788,6 +788,7 @@ async fn libraries_recommended(
         &user.id,
         authorized.as_ref(),
         &user.restrictions,
+        state.settings.get().recent_reading_since(),
         &page_5,
     )?;
 
@@ -1088,6 +1089,7 @@ async fn list_feed(
                 &user.id,
                 authorized.as_ref(),
                 &user.restrictions,
+                state.settings.get().recent_reading_since(),
                 &page_request,
             )?;
             uri = url_builder(
@@ -2997,6 +2999,41 @@ mod tests {
         assert_eq!(feed["metadata"]["title"], "All libraries - On Deck");
         assert_eq!(feed["metadata"]["numberOfItems"], 1);
         assert_eq!(feed["publications"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn on_deck_feed_follows_recent_reading_window() {
+        let state = test_state();
+        seed_base(&state.db);
+        let admin = admin_id(&state.db);
+        seed_read_progress(&state.db, "b1", &admin, 10, true);
+        // series s1 was last read on 2021-06-01
+        seed_rps(&state.db, "s1", &admin, 1, 0);
+        let on_deck = || async {
+            let (status, _, body) = call(
+                &state,
+                router(),
+                get("/opds/v2/libraries/on-deck", ADMIN_KEY),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK);
+            json(&body)["metadata"]["numberOfItems"].clone()
+        };
+
+        komga_db::dao::settings::SettingsDao::new(state.db.clone())
+            .save_setting_i64("KMRS_RECENT_READING_DAYS", 30)
+            .unwrap();
+        state.settings.reload();
+        assert_eq!(on_deck().await, 0);
+
+        exec(
+            &state.db,
+            "UPDATE READ_PROGRESS_SERIES SET MOST_RECENT_READ_DATE = ? WHERE SERIES_ID = 's1'",
+            rusqlite::params![komga_core::time_codec::format_datetime(
+                komga_core::time_codec::now_utc()
+            )],
+        );
+        assert_eq!(on_deck().await, 1);
     }
 
     #[tokio::test]

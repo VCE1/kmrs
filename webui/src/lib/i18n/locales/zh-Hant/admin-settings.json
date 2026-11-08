@@ -125,13 +125,19 @@
     "unsaved_other": "{{count}} 項未儲存的變更",
     "discard": "捨棄",
     "fixInvalid": "請修正上方無效的欄位後再儲存。",
-    "saveFailed": "無法儲存設定。"
+    "saveFailed": "無法儲存設定。",
+    "recentReadingDays": "近期閱讀時間範圍",
+    "recentReadingDaysHelper": "「繼續閱讀」和「待讀」只顯示在此期間內閱讀過的系列。"
   },
   "thumbnail": {
     "default": "預設",
     "medium": "中",
     "large": "大",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_other": "{{count}} 天",
+    "off": "關閉"
   },
   "rotateKey": {
     "button": "輪換「記住我」金鑰",

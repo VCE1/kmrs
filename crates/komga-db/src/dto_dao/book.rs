@@ -457,12 +457,14 @@ impl BookDtoDao {
     }
 
     /// On Deck: the first unread book of each series that has at least one book read and none
-    /// in progress (`BookCommonDao.getBooksOnDeckQuery`).
+    /// in progress (`BookCommonDao.getBooksOnDeckQuery`). `read_since` (kmrs) keeps only series
+    /// whose most recent read date is at or after it.
     pub fn find_all_on_deck(
         &self,
         user_id: &str,
         filter_library_ids: Option<&BTreeSet<String>>,
         restrictions: &ContentRestrictions,
+        read_since: Option<time::OffsetDateTime>,
         page: &PageRequest,
     ) -> Result<DtoPage<BookDto>> {
         let conn = self.db.ro()?;
@@ -477,6 +479,13 @@ impl BookDtoDao {
         };
         // Kotlin ANDs the restriction condition unconditionally; it is noCondition when unrestricted
         cte_conditions = cte_conditions.and(content_restrictions_condition(restrictions));
+        if let Some(since) = read_since {
+            cte_conditions = cte_conditions.and(SqlWhere {
+                sql: "READ_PROGRESS_SERIES.MOST_RECENT_READ_DATE >= ?".to_string(),
+                params: vec![Value::Text(komga_core::time_codec::format_datetime(since))],
+                joins: BTreeSet::new(),
+            });
+        }
         if let Some(ids) = &library_vec {
             cte_conditions =
                 cte_conditions.and(id_in_or_no_condition("SERIES.LIBRARY_ID", Some(ids)));
@@ -2385,6 +2394,70 @@ mod tests {
     }
 
     #[test]
+    fn on_deck_read_since_keeps_recently_read_series() {
+        let db = base_db();
+        let conn = db.rw().unwrap();
+        insert_series(&conn, "s4", "l1", 2, false);
+        insert_series_metadata(&conn, "s4", "Delta", "P1", None);
+        insert_book(&conn, "b7", "s4", "l1", 50, "h4", false, false);
+        insert_book(&conn, "b8", "s4", "l1", 60, "h5", false, false);
+        insert_media(&conn, "b7", "READY", "application/zip", 1);
+        insert_media(&conn, "b8", "READY", "application/zip", 1);
+        insert_book_metadata(&conn, "b7", "Book Seven", 1.0, None);
+        insert_book_metadata(&conn, "b8", "Book Eight", 2.0, None);
+        insert_read_progress(&conn, "b7", "u1", 1, true);
+        insert_read_progress_series(&conn, "s4", "u1", 1, 0, Some("2022-01-01 00:00:00.0"));
+        drop(conn);
+
+        let d = dao(&db);
+        let none = ContentRestrictions::default();
+        let at = |s: &str| {
+            time::PrimitiveDateTime::parse(
+                s,
+                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
+            )
+            .unwrap()
+            .assume_utc()
+        };
+
+        // series s2 was last read on 2021-06-01, series s4 on 2022-01-01
+        let page = d
+            .find_all_on_deck(
+                "u1",
+                None,
+                &none,
+                Some(at("2021-12-31 00:00:00")),
+                &unpaged(),
+            )
+            .unwrap();
+        assert_eq!(page.total, 1);
+        assert_eq!(ids(&page), ["b8"]);
+
+        // the bound is inclusive
+        let page = d
+            .find_all_on_deck(
+                "u1",
+                None,
+                &none,
+                Some(at("2022-01-01 00:00:00")),
+                &unpaged(),
+            )
+            .unwrap();
+        assert_eq!(ids(&page), ["b8"]);
+
+        let page = d
+            .find_all_on_deck(
+                "u1",
+                None,
+                &none,
+                Some(at("2023-01-01 00:00:00")),
+                &unpaged(),
+            )
+            .unwrap();
+        assert_eq!(page.total, 0);
+    }
+
+    #[test]
     fn on_deck_returns_first_unread_of_partially_read_series() {
         let db = base_db();
         // a second on-deck series with a newer read date to exercise the ordering
@@ -2403,7 +2476,9 @@ mod tests {
 
         let d = dao(&db);
         let none = ContentRestrictions::default();
-        let page = d.find_all_on_deck("u1", None, &none, &unpaged()).unwrap();
+        let page = d
+            .find_all_on_deck("u1", None, &none, None, &unpaged())
+            .unwrap();
         assert_eq!(page.total, 2);
         // most recently read series first
         assert_eq!(ids(&page), ["b8", "b5"]);
@@ -2419,7 +2494,7 @@ mod tests {
             BTreeSet::new(),
         );
         let page = d
-            .find_all_on_deck("u1", None, &restrictions, &unpaged())
+            .find_all_on_deck("u1", None, &restrictions, None, &unpaged())
             .unwrap();
         assert!(page.items.is_empty());
 
@@ -2429,13 +2504,13 @@ mod tests {
             BTreeSet::new(),
         );
         let page = d
-            .find_all_on_deck("u1", None, &restrictions, &unpaged())
+            .find_all_on_deck("u1", None, &restrictions, None, &unpaged())
             .unwrap();
         assert_eq!(id_set(&page), set(&["b5"]));
 
         // library filter: b5 and b8 are both in l1
         let page = d
-            .find_all_on_deck("u1", Some(&set(&["l2"])), &none, &unpaged())
+            .find_all_on_deck("u1", Some(&set(&["l2"])), &none, None, &unpaged())
             .unwrap();
         assert!(page.items.is_empty());
     }
@@ -2463,7 +2538,13 @@ mod tests {
         drop(conn);
 
         let page = dao(&db)
-            .find_all_on_deck("u1", None, &ContentRestrictions::default(), &unpaged())
+            .find_all_on_deck(
+                "u1",
+                None,
+                &ContentRestrictions::default(),
+                None,
+                &unpaged(),
+            )
             .unwrap();
         assert_eq!(page.total, 2);
         assert_eq!(ids(&page), ["b11", "b5"]);
@@ -2477,6 +2558,7 @@ mod tests {
                 "u1",
                 None,
                 &ContentRestrictions::default(),
+                None,
                 &PageRequest {
                     page: 5,
                     size: 20,
@@ -2515,10 +2597,14 @@ mod tests {
         let none = ContentRestrictions::default();
         // two on-deck series, one book per page: total must reflect the full
         // filtered result, not the page size
-        let first = d.find_all_on_deck("u1", None, &none, &paged(0)).unwrap();
+        let first = d
+            .find_all_on_deck("u1", None, &none, None, &paged(0))
+            .unwrap();
         assert_eq!(first.total, 2);
         assert_eq!(ids(&first), ["b8"]);
-        let second = d.find_all_on_deck("u1", None, &none, &paged(1)).unwrap();
+        let second = d
+            .find_all_on_deck("u1", None, &none, None, &paged(1))
+            .unwrap();
         assert_eq!(second.total, 2);
         assert_eq!(ids(&second), ["b5"]);
     }

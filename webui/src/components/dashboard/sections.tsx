@@ -11,12 +11,21 @@ import { BookRowCard, SeriesRowCard } from './row-cards'
 
 const PAGE_SIZE = 20
 
+export interface DashboardFetchOptions {
+  /** the server's recent reading window in days; 0 = off */
+  recentReadingDays: number
+}
+
 export interface DashboardSectionDef {
   /** dashboard-ns key, resolved with t() at the render site */
   titleKey: string
   kind: 'book' | 'series'
   /** libraryIds undefined aggregates every library; callers must not pass an empty array */
-  fetchPage: (libraryIds: string[] | undefined, page: number) => Promise<Page<BookDto | SeriesDto>>
+  fetchPage: (
+    libraryIds: string[] | undefined,
+    page: number,
+    options: DashboardFetchOptions,
+  ) => Promise<Page<BookDto | SeriesDto>>
   renderRow: (item: BookDto | SeriesDto) => ReactNode
   renderGrid: (item: BookDto | SeriesDto, selection: CardSelection) => ReactNode
   /** pending placeholder for the row; defaults to grid card skeletons */
@@ -25,7 +34,7 @@ export interface DashboardSectionDef {
 
 interface BookSectionDef {
   titleKey: string
-  fetchPage: (libraryIds: string[] | undefined, page: number) => Promise<Page<BookDto>>
+  fetchPage: (libraryIds: string[] | undefined, page: number, options: DashboardFetchOptions) => Promise<Page<BookDto>>
   renderRow: (book: BookDto) => ReactNode
   renderGrid: (book: BookDto, selection: CardSelection) => ReactNode
   renderSkeleton?: () => ReactNode
@@ -48,6 +57,29 @@ function libraryConditions(libraryIds: string[] | undefined): SearchCondition[] 
   return [{ anyOf: libraryIds.map((id) => ({ libraryId: { operator: 'is', value: id } }) as SearchCondition) }]
 }
 
+/**
+ * Keeps the books read within the last `days` (0 = all). The page is sorted by read date, newest
+ * first, so the first older book ends the list: later pages can't contain newer ones.
+ */
+export function readWithin(page: Page<BookDto>, days: number, now = Date.now()): Page<BookDto> {
+  if (days <= 0) return page
+  const cutoff = now - days * 86_400_000
+  const kept = page.content.filter((b) => {
+    const read = b.readProgress?.readDate
+    return read !== undefined && Date.parse(read) >= cutoff
+  })
+  if (kept.length === page.content.length) return page
+  return {
+    ...page,
+    content: kept,
+    numberOfElements: kept.length,
+    empty: kept.length === 0,
+    totalElements: page.number * page.size + kept.length,
+    totalPages: page.number + 1,
+    last: true,
+  }
+}
+
 // parity with the legacy komga UI: the section covers only the last month of releases
 function oneMonthAgo(): string {
   const d = new Date()
@@ -63,17 +95,20 @@ const seriesGrid = (s: SeriesDto, selection: CardSelection) => <SeriesCard serie
 export const DASHBOARD_SECTIONS = {
   'keep-reading': bookSection({
     titleKey: 'sections.keepReading',
-    fetchPage: (libraryIds, page) =>
-      booksApi.list({
-        search: {
-          condition: {
-            allOf: [{ readStatus: { operator: 'is', value: 'IN_PROGRESS' } }, ...libraryConditions(libraryIds)],
+    fetchPage: async (libraryIds, page, { recentReadingDays }) =>
+      readWithin(
+        await booksApi.list({
+          search: {
+            condition: {
+              allOf: [{ readStatus: { operator: 'is', value: 'IN_PROGRESS' } }, ...libraryConditions(libraryIds)],
+            },
           },
-        },
-        page,
-        size: PAGE_SIZE,
-        sort: ['readProgress.readDate,desc'],
-      }),
+          page,
+          size: PAGE_SIZE,
+          sort: ['readProgress.readDate,desc'],
+        }),
+        recentReadingDays,
+      ),
     renderRow: (b) => <KeepReadingCard book={b} className="snap-start" />,
     renderGrid: bookGrid,
     renderSkeleton: () => <HorizontalCardSkeleton />,

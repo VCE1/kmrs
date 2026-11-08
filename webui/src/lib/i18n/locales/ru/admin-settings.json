@@ -155,13 +155,22 @@
     "unsaved_other": "{{count}} несохранённых изменения",
     "discard": "Отменить",
     "fixInvalid": "Исправьте неверные поля выше, чтобы сохранить.",
-    "saveFailed": "Не удалось сохранить настройки."
+    "saveFailed": "Не удалось сохранить настройки.",
+    "recentReadingDays": "Период недавнего чтения",
+    "recentReadingDaysHelper": "«Продолжить чтение» и «На очереди» показывают только серии, прочитанные за этот период."
   },
   "thumbnail": {
     "default": "По умолчанию",
     "medium": "Средний",
     "large": "Большой",
     "xlarge": "XL"
+  },
+  "recentReading": {
+    "days_one": "{{count}} день",
+    "days_few": "{{count}} дня",
+    "days_many": "{{count}} дней",
+    "days_other": "{{count}} дня",
+    "off": "Выкл."
   },
   "rotateKey": {
     "button": "Сменить ключ «Запомнить меня»",
