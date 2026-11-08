@@ -314,9 +314,6 @@ export function PagedReader({
     spreadCount: spreads.length,
     followForward: !(curSplittable && splitHalf === 0),
     followBackward: !(curSplittable && splitHalf === 1),
-    // a double spread packs two pages into the viewport, so the same drag distance sweeps
-    // twice the content past the eye; committing earlier keeps the gesture from feeling heavy
-    commitRatio: pageLayout === 'SINGLE_PAGE' ? 0.5 : 0.3,
     swipe,
     onNext: next,
     onPrevious: prev,

@@ -195,6 +195,9 @@ export function useEdgePull(options: EdgePullOptions) {
     }
   }
 
+  // attaches to the scroller element once on mount, so the scroller must render
+  // unconditionally: making it conditional or remounting it under a key would leave
+  // the pull listening on a detached node, or on nothing
   useEffect(() => {
     const el = opts.current.scroller()
     if (!el) return
