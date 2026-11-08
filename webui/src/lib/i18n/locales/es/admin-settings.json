@@ -37,6 +37,7 @@
     "security": "Seguridad",
     "thumbnails": "Miniaturas",
     "tasks": "Tareas",
+    "reading": "Lectura",
     "kobo": "Kobo"
   },
   "content": {
@@ -137,6 +138,8 @@
     "taskPoolSize": "Tamaño del grupo de tareas",
     "taskPoolSizeHelper": "Cuántas tareas en segundo plano pueden ejecutarse a la vez.",
     "koboProxy": "Proxy de Kobo",
+    "skipReadOnNext": "«Siguiente libro» omite los libros leídos",
+    "skipReadOnNextHelper": "En series y listas de lectura, «siguiente libro» va al primer libro aún no terminado, o al siguiente sin más si todos los posteriores están leídos. Se aplica a todos los clientes.",
     "unsaved_one": "{{count}} cambio sin guardar",
     "unsaved_many": "{{count}} cambios sin guardar",
     "unsaved_other": "{{count}} cambios sin guardar",

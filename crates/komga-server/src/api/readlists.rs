@@ -224,9 +224,8 @@ async fn get_book_sibling_next_in_readlist(
     State(state): State<AppState>,
     auth: RequireAuth,
     Path((id, book_id)): Path<(String, String)>,
-    qp: QueryPageable,
 ) -> Result<Json<BookDto>, ApiError> {
-    let skip_read = qp.params.first_bool("skipRead").unwrap_or(false);
+    let skip_read = state.settings.get().next_skip_read;
     get_book_sibling_in_readlist(&state, &auth, &id, &book_id, true, skip_read).await
 }
 
@@ -1060,12 +1059,12 @@ mod tests {
         // unordered list by release date: b3 (2019), b1 (2020), b2 (2021)
         seed_readlist(&state.db, "r3", "unordered", false, &["b1", "b2", "b3"]);
 
-        async fn next_skip(state: &AppState, readlist: &str, book: &str) -> String {
+        async fn next(state: &AppState, readlist: &str, book: &str) -> String {
             let (status, _, body) = call(
                 state,
                 router(),
                 get(
-                    &format!("/api/v1/readlists/{readlist}/books/{book}/next?skipRead=true"),
+                    &format!("/api/v1/readlists/{readlist}/books/{book}/next"),
                     ADMIN_KEY,
                 ),
             )
@@ -1075,30 +1074,25 @@ mod tests {
             book["id"].as_str().unwrap().to_string()
         }
 
-        // unordered: with nothing read the plain next is returned
-        assert_eq!(next_skip(&state, "r3", "b3").await, "b1");
-        // skipRead walks past the read b1 to b2
+        // setting off (default): b1 is the plain next even though read
         seed_read_progress(&state.db, "b1", &uid, true);
-        assert_eq!(next_skip(&state, "r3", "b3").await, "b2");
-        // b1 is still the plain next even though read
-        let (status, _, body) = call(
-            &state,
-            router(),
-            get("/api/v1/readlists/r3/books/b3/next", ADMIN_KEY),
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK);
-        let book: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(book["id"], "b1");
+        assert_eq!(next(&state, "r3", "b3").await, "b1");
 
-        // ordered r1: b1, b3, b2 — with b3 read, skipRead jumps to b2
+        // setting on: walks past the read b1 to b2
+        komga_db::dao::settings::SettingsDao::new(state.db.clone())
+            .save_setting_bool(crate::settings::KEY_NEXT_SKIP_READ, true)
+            .unwrap();
+        state.settings.reload();
+        assert_eq!(next(&state, "r3", "b3").await, "b2");
+
+        // ordered r1: b1, b3, b2 — with b3 read, the next unread is b2
         seed_read_progress(&state.db, "b3", &uid, true);
-        assert_eq!(next_skip(&state, "r1", "b1").await, "b2");
+        assert_eq!(next(&state, "r1", "b1").await, "b2");
 
         // every later book read: falls back to the plain next
         seed_read_progress(&state.db, "b2", &uid, true);
-        assert_eq!(next_skip(&state, "r1", "b1").await, "b3");
-        assert_eq!(next_skip(&state, "r3", "b3").await, "b1");
+        assert_eq!(next(&state, "r1", "b1").await, "b3");
+        assert_eq!(next(&state, "r3", "b3").await, "b1");
     }
 
     #[tokio::test]

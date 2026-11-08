@@ -54,6 +54,7 @@ async fn get_server_settings(
                 .map(|p| p.display().to_string()),
         }),
         max_upload_file_size_bytes: Some(DEFAULT_MAX_FILE_SIZE_BYTES),
+        skip_read_on_next: Some(s.next_skip_read),
     };
     if auth.0.user.is_admin() {
         Json(dto)
@@ -103,6 +104,9 @@ async fn update_server_settings(
     }
     if let Some(v) = body.kobo_proxy {
         dao.save_setting_bool("KOBO_PROXY", v)?;
+    }
+    if let Some(v) = body.skip_read_on_next {
+        dao.save_setting_bool(crate::settings::KEY_NEXT_SKIP_READ, v)?;
     }
 
     state.settings.reload();
@@ -157,6 +161,7 @@ mod tests {
             serde_json::Value::Null
         );
         assert_eq!(json["koboProxy"], false);
+        assert_eq!(json["skipReadOnNext"], false);
         assert_eq!(json["maxUploadFileSizeBytes"], 1_048_576);
 
         // non-admin: only maxUploadFileSizeBytes survives
@@ -170,6 +175,7 @@ mod tests {
         assert!(json.get("taskPoolSize").is_none());
         assert!(json.get("serverPort").is_none());
         assert!(json.get("deleteEmptyCollections").is_none());
+        assert!(json.get("skipReadOnNext").is_none());
     }
 
     async fn get_kepubify(state: &AppState, key: &str) -> serde_json::Value {
@@ -228,7 +234,8 @@ mod tests {
             "deleteEmptyCollections": true,
             "taskPoolSize": 4,
             "thumbnailSize": "LARGE",
-            "koboProxy": true
+            "koboProxy": true,
+            "skipReadOnNext": true
         });
         let (status, _, _) = call(
             &state,
@@ -246,6 +253,15 @@ mod tests {
         assert_eq!(s.task_pool_size, 4);
         assert_eq!(s.thumbnail_size.as_str(), "LARGE");
         assert!(s.kobo_proxy);
+        assert!(s.next_skip_read);
+        // stored under the kmrs prefix, next to the Komga keys
+        assert_eq!(
+            komga_db::dao::settings::SettingsDao::new(state.db.clone())
+                .get_setting("KMRS_NEXT_SKIP_READ")
+                .unwrap()
+                .as_deref(),
+            Some("true")
+        );
     }
 
     #[tokio::test]

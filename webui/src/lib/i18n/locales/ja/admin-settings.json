@@ -35,6 +35,7 @@
     "security": "セキュリティ",
     "thumbnails": "サムネイル",
     "tasks": "タスク",
+    "reading": "読書",
     "kobo": "Kobo"
   },
   "content": {
@@ -119,6 +120,8 @@
     "taskPoolSize": "タスクプールサイズ",
     "taskPoolSizeHelper": "同時に実行できるバックグラウンドタスクの数。",
     "koboProxy": "Kobo プロキシ",
+    "skipReadOnNext": "「次の本」で既読の本をスキップ",
+    "skipReadOnNextHelper": "シリーズとリーディングリストで、「次の本」はまだ読み終えていない最初の本に移動します。以降がすべて既読なら通常どおり次の本に移動します。すべてのクライアントに適用されます。",
     "unsaved_other": "{{count}} 件の未保存の変更",
     "discard": "破棄",
     "fixInvalid": "上の無効なフィールドを修正してから保存してください。",

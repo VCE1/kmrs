@@ -35,6 +35,7 @@
     "security": "보안",
     "thumbnails": "썸네일",
     "tasks": "작업",
+    "reading": "읽기",
     "kobo": "Kobo"
   },
   "content": {
@@ -119,6 +120,8 @@
     "taskPoolSize": "작업 풀 크기",
     "taskPoolSizeHelper": "동시에 실행할 수 있는 백그라운드 작업 수입니다.",
     "koboProxy": "Kobo 프록시",
+    "skipReadOnNext": "\"다음 책\"에서 읽은 책 건너뛰기",
+    "skipReadOnNextHelper": "시리즈와 읽기 목록에서 \"다음 책\"은 아직 다 읽지 않은 첫 번째 책으로 이동하고, 이후 책을 모두 읽었다면 평소처럼 다음 책으로 이동합니다. 모든 클라이언트에 적용됩니다.",
     "unsaved_other": "저장되지 않은 변경 사항 {{count}}개",
     "discard": "버리기",
     "fixInvalid": "저장하려면 위의 잘못된 필드를 수정하세요.",

@@ -36,6 +36,7 @@
     "security": "Sicherheit",
     "thumbnails": "Vorschaubilder",
     "tasks": "Aufgaben",
+    "reading": "Lesen",
     "kobo": "Kobo"
   },
   "content": {
@@ -128,6 +129,8 @@
     "taskPoolSize": "Aufgaben-Poolgröße",
     "taskPoolSizeHelper": "Wie viele Hintergrundaufgaben gleichzeitig laufen können.",
     "koboProxy": "Kobo-Proxy",
+    "skipReadOnNext": "„Nächstes Buch“ überspringt gelesene Bücher",
+    "skipReadOnNextHelper": "In Serien und Leselisten geht „Nächstes Buch“ zum ersten noch nicht fertig gelesenen Buch, oder normal zum nächsten, wenn alle folgenden gelesen sind. Gilt für alle Clients.",
     "unsaved_one": "{{count}} ungespeicherte Änderung",
     "unsaved_other": "{{count}} ungespeicherte Änderungen",
     "discard": "Verwerfen",

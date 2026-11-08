@@ -129,6 +129,16 @@ export function SettingsForm({ settings }: { settings: SettingsDto }) {
         </FormRow>
       </Section>
 
+      <Section title={t('sections.reading')}>
+        <FormRow label={t('form.skipReadOnNext')} helper={t('form.skipReadOnNextHelper')}>
+          <Switch
+            checked={draft.skipReadOnNext}
+            onCheckedChange={(v) => set('skipReadOnNext', v)}
+            label={t('form.skipReadOnNext')}
+          />
+        </FormRow>
+      </Section>
+
       <Section title={t('sections.kobo')}>
         <FormRow label={t('form.koboProxy')}>
           <Switch checked={draft.koboProxy} onCheckedChange={(v) => set('koboProxy', v)} label={t('form.koboProxy')} />

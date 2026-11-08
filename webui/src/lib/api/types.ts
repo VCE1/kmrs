@@ -390,6 +390,8 @@ export interface SettingsDto {
   koboProxy?: boolean
   kepubifyPath?: SettingMultiSource<string>
   maxUploadFileSizeBytes?: number
+  /** kmrs: the next-book endpoints skip read books. Admin only. */
+  skipReadOnNext?: boolean
 }
 
 /** Patch semantics: omit = unchanged. */
@@ -401,6 +403,7 @@ export interface SettingsUpdateDto {
   thumbnailSize?: ThumbnailSize
   taskPoolSize?: number
   koboProxy?: boolean
+  skipReadOnNext?: boolean
 }
 
 // ---- Admin: filesystem browser ----

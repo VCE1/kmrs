@@ -12,6 +12,8 @@ const KEY_REMEMBER_ME_DURATION: &str = "REMEMBER_ME_DURATION";
 const KEY_THUMBNAIL_SIZE: &str = "THUMBNAIL_SIZE";
 const KEY_TASK_POOL_SIZE: &str = "TASK_POOL_SIZE";
 const KEY_KOBO_PROXY: &str = "KOBO_PROXY";
+/// kmrs-only; the `KMRS_` prefix keeps it clear of Komga's keys, which the Java version reads one by one
+pub(crate) const KEY_NEXT_SKIP_READ: &str = "KMRS_NEXT_SKIP_READ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThumbnailSize {
@@ -60,6 +62,8 @@ pub struct KomgaSettings {
     pub thumbnail_size: ThumbnailSize,
     pub task_pool_size: u32,
     pub kobo_proxy: bool,
+    /// the next-book endpoints skip books the user has already read (kmrs enhancement)
+    pub next_skip_read: bool,
 }
 
 pub struct SettingsProvider {
@@ -96,6 +100,7 @@ impl SettingsProvider {
                 ),
                 task_pool_size: dao.get_setting_i64(KEY_TASK_POOL_SIZE)?.unwrap_or(2).max(0) as u32,
                 kobo_proxy: dao.get_setting_bool(KEY_KOBO_PROXY)?.unwrap_or(false),
+                next_skip_read: dao.get_setting_bool(KEY_NEXT_SKIP_READ)?.unwrap_or(false),
             })
         };
         let inner = read().expect("failed to load server settings");

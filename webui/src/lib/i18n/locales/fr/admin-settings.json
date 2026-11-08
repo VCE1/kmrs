@@ -37,6 +37,7 @@
     "security": "Sécurité",
     "thumbnails": "Miniatures",
     "tasks": "Tâches",
+    "reading": "Lecture",
     "kobo": "Kobo"
   },
   "content": {
@@ -137,6 +138,8 @@
     "taskPoolSize": "Taille du pool de tâches",
     "taskPoolSizeHelper": "Nombre de tâches d'arrière-plan pouvant s'exécuter en parallèle.",
     "koboProxy": "Proxy Kobo",
+    "skipReadOnNext": "« Livre suivant » ignore les livres lus",
+    "skipReadOnNextHelper": "Dans les séries et les listes de lecture, « livre suivant » mène au premier livre pas encore terminé, ou simplement au suivant si tous les livres suivants sont lus. S’applique à tous les clients.",
     "unsaved_one": "{{count}} modification non enregistrée",
     "unsaved_many": "{{count}} modifications non enregistrées",
     "unsaved_other": "{{count}} modifications non enregistrées",

@@ -9,6 +9,7 @@ export interface SettingsDraft {
   thumbnailSize: ThumbnailSize
   taskPoolSize: string
   koboProxy: boolean
+  skipReadOnNext: boolean
 }
 
 export function draftFromSettings(s: SettingsDto): SettingsDraft {
@@ -19,6 +20,7 @@ export function draftFromSettings(s: SettingsDto): SettingsDraft {
     thumbnailSize: s.thumbnailSize ?? 'DEFAULT',
     taskPoolSize: s.taskPoolSize?.toString() ?? '',
     koboProxy: s.koboProxy ?? false,
+    skipReadOnNext: s.skipReadOnNext ?? false,
   }
 }
 
@@ -44,5 +46,6 @@ export function computeChanges(s: SettingsDto, d: SettingsDraft): SettingsUpdate
   if (d.thumbnailSize !== (s.thumbnailSize ?? 'DEFAULT')) changes.thumbnailSize = d.thumbnailSize
   if (d.taskPoolSize.trim() !== (s.taskPoolSize?.toString() ?? '')) changes.taskPoolSize = Number(d.taskPoolSize)
   if (d.koboProxy !== (s.koboProxy ?? false)) changes.koboProxy = d.koboProxy
+  if (d.skipReadOnNext !== (s.skipReadOnNext ?? false)) changes.skipReadOnNext = d.skipReadOnNext
   return changes
 }

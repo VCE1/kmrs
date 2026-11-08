@@ -36,6 +36,7 @@
     "security": "Security",
     "thumbnails": "Thumbnails",
     "tasks": "Tasks",
+    "reading": "Reading",
     "kobo": "Kobo"
   },
   "content": {
@@ -128,6 +129,8 @@
     "taskPoolSize": "Task pool size",
     "taskPoolSizeHelper": "How many background tasks can run at once.",
     "koboProxy": "Kobo proxy",
+    "skipReadOnNext": "Next book skips read books",
+    "skipReadOnNextHelper": "In series and read lists, “next book” goes to the first book not finished yet, or to the plain next book when every later one is read. Applies to every client.",
     "unsaved_one": "{{count}} unsaved change",
     "unsaved_other": "{{count}} unsaved changes",
     "discard": "Discard",

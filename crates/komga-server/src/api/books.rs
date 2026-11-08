@@ -516,9 +516,8 @@ async fn get_book_sibling_next(
     State(state): State<AppState>,
     auth: RequireAuth,
     Path(book_id): Path<String>,
-    qp: QueryPageable,
 ) -> Result<Json<BookDto>, ApiError> {
-    let skip_read = qp.params.first_bool("skipRead").unwrap_or(false);
+    let skip_read = state.settings.get().next_skip_read;
     get_book_sibling(state, auth, book_id, true, skip_read).await
 }
 
@@ -2744,48 +2743,35 @@ mod tests {
         };
         mark_read("b2");
         let app = test_router(state.clone());
+        let next_of_b1 = || {
+            let app = app.clone();
+            async move {
+                let (status, _, body) = call(
+                    &app,
+                    "GET",
+                    "/api/v1/books/b1/next",
+                    Some(&basic("admin@example.org", "pw")),
+                    None,
+                )
+                .await;
+                assert_eq!(status, StatusCode::OK);
+                json(&body)["id"].as_str().unwrap().to_string()
+            }
+        };
 
-        // skipRead walks past the read b2 to the unread b3
-        let (status, _, body) = call(
-            &app,
-            "GET",
-            "/api/v1/books/b1/next?skipRead=true",
-            Some(&basic("admin@example.org", "pw")),
-            None,
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json(&body)["id"], "b3");
+        // setting off (default): the plain next
+        assert_eq!(next_of_b1().await, "b2");
 
-        // default and explicit false keep the plain next
-        for uri in [
-            "/api/v1/books/b1/next",
-            "/api/v1/books/b1/next?skipRead=false",
-        ] {
-            let (status, _, body) = call(
-                &app,
-                "GET",
-                uri,
-                Some(&basic("admin@example.org", "pw")),
-                None,
-            )
-            .await;
-            assert_eq!(status, StatusCode::OK);
-            assert_eq!(json(&body)["id"], "b2");
-        }
+        // setting on: walks past the read b2 to the unread b3
+        komga_db::dao::settings::SettingsDao::new(db.clone())
+            .save_setting_bool(crate::settings::KEY_NEXT_SKIP_READ, true)
+            .unwrap();
+        state.settings.reload();
+        assert_eq!(next_of_b1().await, "b3");
 
         // every later book read: falls back to the plain next
         mark_read("b3");
-        let (status, _, body) = call(
-            &app,
-            "GET",
-            "/api/v1/books/b1/next?skipRead=true",
-            Some(&basic("admin@example.org", "pw")),
-            None,
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(json(&body)["id"], "b2");
+        assert_eq!(next_of_b1().await, "b2");
     }
 
     #[tokio::test]

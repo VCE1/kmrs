@@ -35,6 +35,7 @@
     "security": "安全",
     "thumbnails": "缩略图",
     "tasks": "任务",
+    "reading": "阅读",
     "kobo": "Kobo"
   },
   "content": {
@@ -119,6 +120,8 @@
     "taskPoolSize": "任务池大小",
     "taskPoolSizeHelper": "可同时运行的后台任务数量。",
     "koboProxy": "Kobo 代理",
+    "skipReadOnNext": "“下一本”跳过已读的书",
+    "skipReadOnNextHelper": "在系列和阅读列表中，“下一本”会跳到第一本还没读完的书；后面的书都已读完时，照常跳到下一本。对所有客户端生效。",
     "unsaved_other": "{{count}} 项未保存的更改",
     "discard": "放弃",
     "fixInvalid": "请先修正上方无效的字段再保存。",

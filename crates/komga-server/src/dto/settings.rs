@@ -29,6 +29,9 @@ pub struct SettingsDto {
     pub kepubify_path: Option<SettingMultiSource<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_upload_file_size_bytes: Option<i64>,
+    /// kmrs enhancement, admin only
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skip_read_on_next: Option<bool>,
 }
 impl SettingsDto {
     /// `SettingsDto.public()`: non-admin users only see the upload size limit
@@ -44,6 +47,7 @@ impl SettingsDto {
             kobo_proxy: None,
             kepubify_path: None,
             max_upload_file_size_bytes: self.max_upload_file_size_bytes,
+            skip_read_on_next: None,
         }
     }
 }
@@ -123,4 +127,7 @@ pub struct SettingsUpdateDto {
     pub task_pool_size: Option<i64>,
     #[serde(deserialize_with = "loose_bool_opt")]
     pub kobo_proxy: Option<bool>,
+    /// kmrs enhancement
+    #[serde(deserialize_with = "loose_bool_opt")]
+    pub skip_read_on_next: Option<bool>,
 }
