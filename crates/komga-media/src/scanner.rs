@@ -405,7 +405,11 @@ fn walk_dir(ctx: &mut WalkContext, dir: &Path, ancestors: &mut Vec<PathBuf>) {
             // transient hiccup protects the rows under the link rather than soft-deleting them
             match std::fs::metadata(&path) {
                 Ok(m) if m.is_dir() => walk_dir(ctx, &path, ancestors),
-                Ok(_) => {} // symlink to a non-directory: ignored, as before
+                Ok(m) if m.is_file() => {
+                    let file_name = entry.file_name().to_string_lossy().into_owned();
+                    visit_file(ctx, &path, &file_name, &m);
+                }
+                Ok(_) => {} // other special file symlink: ignored
                 Err(_) => {
                     tracing::warn!("Could not access: {}", path.display());
                     // The symlink target is unreachable: its contents are unknown.
