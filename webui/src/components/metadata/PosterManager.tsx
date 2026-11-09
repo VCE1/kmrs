@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, CircleNotch, ImageSquare, Trash, UploadSimple } from '@phosphor-icons/react'
+import { Check, CircleNotch, ImageSquare, MagnifyingGlassPlus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { bookPostersApi, collectionPostersApi, readListPostersApi, seriesPostersApi, smartListPostersApi } from '@/lib/api/posters'
 import type { ThumbnailType } from '@/lib/api/types'
 import { useBust, useThumbnailBust } from '@/lib/store/thumbnails'
@@ -12,6 +12,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { IconButton } from '@/components/ui/IconButton'
 import { GridSkeleton } from '@/components/ui/Skeleton'
+import { CoverLightbox } from '@/components/media/CoverLightbox'
 import { FormErrorBanner } from './fields'
 
 export type PosterKind = 'series' | 'book' | 'collection' | 'readlist' | 'smartlist'
@@ -78,6 +79,7 @@ export function PosterManager({
   const fileRef = useRef<HTMLInputElement>(null)
   const [armedDelete, setArmedDelete] = useState<string | null>(null)
   const [errors, setErrors] = useState<string[]>([])
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null)
 
   const postersQuery = useQuery({
     queryKey: ['posters', kind, entityId],
@@ -200,7 +202,14 @@ export function PosterManager({
                     </span>
                   )}
 
-                  <div className="absolute top-2 right-2">
+                  <div className="absolute top-2 right-2 flex items-center gap-1">
+                    <IconButton
+                      label={t('common:action.viewCover', '查看大图')}
+                      onClick={() => setPreviewSrc(`${api.thumbnailUrl(entityId, p.id)}${bust ? `?${bust}` : ''}`)}
+                      className="size-7 bg-black/60 text-white/85 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80 hover:text-white"
+                    >
+                      <MagnifyingGlassPlus className="size-3.5" />
+                    </IconButton>
                     {armed ? (
                       <button
                         type="button"
@@ -235,6 +244,12 @@ export function PosterManager({
         )}
         {busy && !postersQuery.isPending && <p className="text-xs text-ink-3">{t('poster.refreshing')}</p>}
       </div>
+      <CoverLightbox
+        open={!!previewSrc}
+        onClose={() => setPreviewSrc(null)}
+        src={previewSrc || ''}
+        title={title}
+      />
     </Dialog>
   )
 }

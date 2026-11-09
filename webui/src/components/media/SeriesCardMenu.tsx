@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ArrowCounterClockwise, ArrowsClockwise, Checks, FileMagnifyingGlass, FolderPlus, PencilSimple, Sparkle, Trash } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, ArrowsClockwise, Checks, Eye, FileMagnifyingGlass, FolderPlus, PencilSimple, Sparkle, Trash } from '@phosphor-icons/react'
 import type { SeriesDto } from '@/lib/api/types'
 import { seriesApi } from '@/lib/api/series'
+import { urls } from '@/lib/utils/urls'
 import { isAdmin, useAuthStore } from '@/lib/store/auth'
 import { useKomfIntegration } from '@/lib/hooks/useKomfIntegration'
 import { Menu, MenuItem, MenuSeparator } from '@/components/ui/Menu'
@@ -11,6 +12,7 @@ import { AddToCollectionDialog } from '@/components/browse/AddToCollectionDialog
 import { ConfirmDeleteFilesDialog } from '@/components/browse/ConfirmDeleteFilesDialog'
 import { EditSeriesDialog } from '@/components/metadata/EditSeriesDialog'
 import { KomfIdentifyDialog } from '@/components/metadata/KomfIdentifyDialog'
+import { CoverLightbox } from './CoverLightbox'
 import { showToast } from '@/lib/store/toast'
 
 /** Series actions for grid cards, plus the dialogs they open. */
@@ -30,6 +32,7 @@ export function SeriesCardMenu({ series, trigger, open, onOpenChange }: SeriesCa
   const [editOpen, setEditOpen] = useState(false)
   const [identifyOpen, setIdentifyOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const komfReady = useKomfIntegration()
 
   const invalidate = () => {
@@ -68,6 +71,9 @@ export function SeriesCardMenu({ series, trigger, open, onOpenChange }: SeriesCa
         <MenuItem onSelect={() => markMutation.mutate(hasUnread)}>
           {hasUnread ? <Checks className="size-4" /> : <ArrowCounterClockwise className="size-4" />}
           {hasUnread ? t('menu.markAsRead') : t('menu.markAsUnread')}
+        </MenuItem>
+        <MenuItem onSelect={() => setViewerOpen(true)}>
+          <Eye className="size-4" /> {t('common:action.viewCover', '查看封面')}
         </MenuItem>
         <MenuItem onSelect={() => setAddOpen(true)}>
           <FolderPlus className="size-4" /> {t('menu.addToCollection')}
@@ -117,6 +123,12 @@ export function SeriesCardMenu({ series, trigger, open, onOpenChange }: SeriesCa
         kind="series"
         loading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
+      />
+      <CoverLightbox
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        src={urls.seriesThumbnail(series.id)}
+        title={series.metadata.title || series.name}
       />
     </>
   )

@@ -6,6 +6,7 @@ import {
   ArrowsClockwise,
   Checks,
   DownloadSimple,
+  Eye,
   FileMagnifyingGlass,
   ListPlus,
   PencilSimple,
@@ -19,6 +20,7 @@ import { Menu, MenuItem, MenuSeparator } from '@/components/ui/Menu'
 import { AddToReadListDialog } from '@/components/browse/AddToReadListDialog'
 import { ConfirmDeleteFilesDialog } from '@/components/browse/ConfirmDeleteFilesDialog'
 import { EditBooksDialog } from '@/components/metadata/EditBooksDialog'
+import { CoverLightbox } from './CoverLightbox'
 import { showToast } from '@/lib/store/toast'
 
 interface BookCardMenuProps {
@@ -39,6 +41,7 @@ export function BookCardMenu({ book, trigger, navItem, open, onOpenChange }: Boo
   const [addOpen, setAddOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['books'] })
@@ -84,6 +87,9 @@ export function BookCardMenu({ book, trigger, navItem, open, onOpenChange }: Boo
             <ArrowCounterClockwise className="size-4" /> {t('menu.markAsUnread')}
           </MenuItem>
         )}
+        <MenuItem onSelect={() => setViewerOpen(true)}>
+          <Eye className="size-4" /> {t('common:action.viewCover', '查看封面')}
+        </MenuItem>
         <MenuItem onSelect={() => setAddOpen(true)}>
           <ListPlus className="size-4" /> {t('menu.addToReadList')}
         </MenuItem>
@@ -127,6 +133,12 @@ export function BookCardMenu({ book, trigger, navItem, open, onOpenChange }: Boo
         kind="book"
         loading={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
+      />
+      <CoverLightbox
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        src={urls.bookThumbnail(book.id)}
+        title={book.metadata.title || book.name}
       />
     </>
   )

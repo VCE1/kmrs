@@ -235,7 +235,7 @@ export function SeriesDetailPage() {
   return (
     <div>
       <DetailHero backdrop={cover} leading={<BackButton to="/series" className="mb-2 -ml-2" />}>
-        <CoverImage src={cover} alt={title} eager className="w-36 shrink-0 shadow-card md:w-44" />
+        <CoverImage src={cover} alt={title} eager previewable className="w-36 shrink-0 shadow-card md:w-44" />
         <div className="min-w-0 flex-1">
           {library && (
             <p className="text-xs tracking-wide text-ink-3 uppercase">
