@@ -14,14 +14,15 @@ use komga_core::model::user::KomgaUser;
 use komga_db::dao::book::BookDao;
 use komga_db::dao::tasks::TasksDao;
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 /// Per-connection timers. Kotlin schedules heartbeat and the task count globally for all
-/// emitters; per-connection timers behave identically for each subscriber and keep no
-/// shared state. Configurable so tests can speed them up.
+/// emitters; per-connection timers behave identically for each subscriber, and the task
+/// count they send is shared (`SseShared`). Configurable so tests can speed them up.
 #[derive(Debug, Clone, Copy)]
 pub struct SseIntervals {
     pub heartbeat: Duration,
@@ -37,6 +38,40 @@ impl Default for SseIntervals {
     }
 }
 
+/// Mapped events kept for the connections still delivering them; sized like the bus's
+/// replay history, so a resuming client reuses them too.
+const PREPARED_EVENTS_CAPACITY: u64 = 1024;
+const PREPARED_EVENTS_TTL: Duration = Duration::from_secs(300);
+
+/// Work done once per server instead of once per connection, like Kotlin's single
+/// `handleSseEvent` and task-count schedule: each recorded event is mapped once (its
+/// series lookup included) and the task queue is counted at most once per interval,
+/// however many clients are connected. Concurrent connections asking for the same entry
+/// wait for one computation. Keyed by the recorded event id, so subscription and replay
+/// stay per connection.
+#[derive(Clone)]
+struct SseShared {
+    prepared: moka::future::Cache<String, Arc<Option<Outgoing>>>,
+    task_counts: moka::future::Cache<(), Arc<dto::TaskQueueSseDto>>,
+}
+
+impl SseShared {
+    fn new(intervals: SseIntervals) -> Self {
+        Self {
+            // LRU: every event id is new, and moka's default TinyLFU admission would
+            // turn new keys away once the cache is full
+            prepared: moka::future::Cache::builder()
+                .max_capacity(PREPARED_EVENTS_CAPACITY)
+                .time_to_live(PREPARED_EVENTS_TTL)
+                .eviction_policy(moka::policy::EvictionPolicy::lru())
+                .build(),
+            task_counts: moka::future::Cache::builder()
+                .time_to_live(intervals.task_status)
+                .build(),
+        }
+    }
+}
+
 pub fn router() -> Router<AppState> {
     router_with_intervals(SseIntervals::default())
 }
@@ -45,9 +80,11 @@ fn router_with_intervals(intervals: SseIntervals) -> Router<AppState> {
     Router::new()
         .route("/sse/v1/events", get(sse_events))
         .layer(Extension(intervals))
+        .layer(Extension(SseShared::new(intervals)))
 }
 
 /// Who may receive an event (`emitSse`'s adminOnly/userIdOnly filters).
+#[derive(Clone)]
 enum Scope {
     All,
     AdminOnly,
@@ -67,6 +104,7 @@ impl Scope {
     }
 }
 
+#[derive(Clone)]
 struct Outgoing {
     name: &'static str,
     data: serde_json::Value,
@@ -103,6 +141,7 @@ async fn sse_events(
     auth: RequireAuth,
     State(state): State<AppState>,
     Extension(intervals): Extension<SseIntervals>,
+    Extension(shared): Extension<SseShared>,
     headers: axum::http::HeaderMap,
 ) -> Response {
     let user = auth.0.user;
@@ -126,7 +165,8 @@ async fn sse_events(
             crate::events::Resume::Live => {}
             crate::events::Resume::Replay(replay) => {
                 for recorded in replay {
-                    let Some(wire) = map_recorded_event(&state, &user, recorded).await else {
+                    let Some(wire) = map_recorded_event(&state, &shared, &user, recorded).await
+                    else {
                         continue;
                     };
                     if tx.send(wire).await.is_err() {
@@ -149,18 +189,9 @@ async fn sse_events(
                     if !user.is_admin() {
                         continue;
                     }
-                    let counts = {
-                        let db = state.tasks_db.clone();
-                        tokio::task::spawn_blocking(move || TasksDao::new(db).count_by_simple_type())
-                            .await
-                            .map_err(|e| e.to_string())
-                            .and_then(|r| r.map_err(|e| e.to_string()))
-                    };
-                    match counts {
-                        Ok(counts) => {
-                            let total = counts.values().sum();
-                            let dto = dto::TaskQueueSseDto { count: total, count_by_type: counts };
-                            Wire::Snapshot { name: "TaskQueueStatus", data: serde_json::to_string(&dto).unwrap() }
+                    match shared.task_counts.try_get_with((), count_tasks(&state)).await {
+                        Ok(dto) => {
+                            Wire::Snapshot { name: "TaskQueueStatus", data: serde_json::to_string(&*dto).unwrap() }
                         }
                         Err(e) => {
                             tracing::warn!("could not count tasks for SSE: {e}");
@@ -170,7 +201,7 @@ async fn sse_events(
                 }
                 event = events.recv() => {
                     match event {
-                        Ok(recorded) => match map_recorded_event(&state, &user, recorded).await {
+                        Ok(recorded) => match map_recorded_event(&state, &shared, &user, recorded).await {
                             Some(wire) => wire,
                             None => continue,
                         },
@@ -196,25 +227,50 @@ async fn sse_events(
         .unwrap()
 }
 
+/// The event as this connection's user may receive it: mapped once for all connections
+/// (`SseShared`), then filtered by its scope.
 async fn map_recorded_event(
     state: &AppState,
+    shared: &SseShared,
     user: &KomgaUser,
     recorded: crate::events::RecordedEvent,
 ) -> Option<Wire> {
-    let id = recorded.id;
-    map_event(state, user, recorded.event)
-        .await
-        .map(|outgoing| Wire::Event {
-            id,
-            name: outgoing.name,
-            data: outgoing.data.to_string(),
+    let crate::events::RecordedEvent { id, event, .. } = recorded;
+    let prepared = shared
+        .prepared
+        .get_with(id.clone(), async {
+            Arc::new(prepare_event(state, event).await)
         })
+        .await;
+    let outgoing = prepared.as_ref().as_ref()?;
+    if !outgoing.scope.allows(user) {
+        return None;
+    }
+    Some(Wire::Event {
+        id,
+        name: outgoing.name,
+        data: outgoing.data.to_string(),
+    })
 }
 
-/// `handleSseEvent`: maps a domain event to its SSE name/payload, applying the
-/// adminOnly/userIdOnly filters. Returns None for events that are never sent
-/// (`LibraryScanned`) or not meant for this user.
-async fn map_event(state: &AppState, user: &KomgaUser, event: DomainEvent) -> Option<Outgoing> {
+/// `TaskQueueStatus` payload, counted on the tasks database.
+async fn count_tasks(state: &AppState) -> Result<Arc<dto::TaskQueueSseDto>, String> {
+    let db = state.tasks_db.clone();
+    let counts = tokio::task::spawn_blocking(move || TasksDao::new(db).count_by_simple_type())
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+    let total = counts.values().sum();
+    Ok(Arc::new(dto::TaskQueueSseDto {
+        count: total,
+        count_by_type: counts,
+    }))
+}
+
+/// `handleSseEvent`: maps a domain event to its SSE name/payload and the audience the
+/// adminOnly/userIdOnly filters allow. Returns None for events that are never sent
+/// (`LibraryScanned`).
+async fn prepare_event(state: &AppState, event: DomainEvent) -> Option<Outgoing> {
     macro_rules! out {
         ($name:expr, $dto:expr) => {
             Some(Outgoing {
@@ -246,7 +302,7 @@ async fn map_event(state: &AppState, user: &KomgaUser, event: DomainEvent) -> Op
         };
     }
 
-    let outgoing = match event {
+    match event {
         DomainEvent::LibraryAdded(l) => {
             out!("LibraryAdded", dto::LibrarySseDto { library_id: l.id })
         }
@@ -256,7 +312,7 @@ async fn map_event(state: &AppState, user: &KomgaUser, event: DomainEvent) -> Op
         DomainEvent::LibraryDeleted(l) => {
             out!("LibraryDeleted", dto::LibrarySseDto { library_id: l.id })
         }
-        DomainEvent::LibraryScanned(_) => return None,
+        DomainEvent::LibraryScanned(_) => None,
 
         DomainEvent::SeriesAdded(s) => out!(
             "SeriesAdded",
@@ -489,12 +545,6 @@ async fn map_event(state: &AppState, user: &KomgaUser, event: DomainEvent) -> Op
         DomainEvent::UserDeleted(u) => {
             out!("SessionExpired", dto::SessionExpiredDto { user_id: u.id.clone() }, user u.id)
         }
-    }?;
-
-    if outgoing.scope.allows(user) {
-        Some(outgoing)
-    } else {
-        None
     }
 }
 
@@ -517,10 +567,12 @@ fn smart_list_scope(event: &SmartListEvent) -> Scope {
 
 /// `ThumbnailBookSseDto.seriesId`: unresolved book ids become an empty string
 async fn book_series_id(state: &AppState, book_id: &str) -> String {
-    let db = state.db.clone();
+    // the task pool, like the search indexer: a thumbnail storm must not compete with
+    // API traffic for read connections
+    let db = state.task_db.clone();
     let book_id = book_id.to_string();
-    // one lookup per event per connection; under an event storm the read-pool checkout can
-    // wait, and that wait must not park an async worker
+    // under an event storm the pool checkout can wait, and that wait must not park an
+    // async worker
     tokio::task::spawn_blocking(move || {
         BookDao::new(db)
             .get_series_id_or_null(&book_id)
@@ -1503,5 +1555,128 @@ mod tests {
         assert_smart_list_event(&mut audience.admin, "SmartListThumbnailChanged", &list.id).await;
         assert_smart_list_event(&mut audience.sharee, "SmartListThumbnailChanged", &list.id).await;
         assert_no_smart_list_event(&mut audience.other).await;
+    }
+
+    fn thumbnail_of(book_id: &str) -> ThumbnailBook {
+        ThumbnailBook {
+            id: "t1".into(),
+            book_id: book_id.into(),
+            thumbnail: None,
+            url: None,
+            selected: true,
+            type_: ThumbnailType::Generated,
+            media_type: "image/jpeg".into(),
+            file_size: 10,
+            dimension: komga_core::model::thumbnail::Dimension {
+                width: 1,
+                height: 1,
+            },
+            created_date: now_utc(),
+            last_modified_date: now_utc(),
+        }
+    }
+
+    /// Records an event on the bus and returns it as connections receive it.
+    async fn record(state: &AppState, event: DomainEvent) -> crate::events::RecordedEvent {
+        let (mut receiver, _) = state.events.subscribe_with_replay(None);
+        state.events.send(event).unwrap();
+        receiver.recv().await.unwrap()
+    }
+
+    fn wire_data(wire: Option<Wire>) -> Option<String> {
+        match wire? {
+            Wire::Event { data, .. } => Some(data),
+            _ => None,
+        }
+    }
+
+    /// Each recorded event is mapped once for every connection: the series lookup runs
+    /// for the first one and the others reuse its result (the book is gone by then), while
+    /// the scope is still checked per user.
+    #[tokio::test]
+    async fn events_are_mapped_once_for_all_connections() {
+        let state = test_state();
+        let admin = UserDao::new(state.db.clone())
+            .find_by_id(&insert_user(&state.db, "admin@komga.org", true))
+            .unwrap()
+            .unwrap();
+        let reader = UserDao::new(state.db.clone())
+            .find_by_id(&insert_user(&state.db, "user@komga.org", false))
+            .unwrap()
+            .unwrap();
+        insert_library(&state.db, "l1");
+        komga_db::dao::series::SeriesDao::new(state.db.clone())
+            .insert(&sample_series("s1", "l1"))
+            .unwrap();
+        komga_db::dao::book::BookDao::new(state.db.clone())
+            .insert(&sample_book("b1", "s1", "l1"))
+            .unwrap();
+        let shared = SseShared::new(SseIntervals::default());
+        let expected = "{\"bookId\":\"b1\",\"seriesId\":\"s1\",\"selected\":true}";
+
+        let thumbnail = record(&state, DomainEvent::ThumbnailBookAdded(thumbnail_of("b1"))).await;
+        let first = map_recorded_event(&state, &shared, &admin, thumbnail.clone()).await;
+        assert_eq!(wire_data(first).as_deref(), Some(expected));
+
+        komga_db::dao::book::BookDao::new(state.db.clone())
+            .delete("b1")
+            .unwrap();
+        let second = map_recorded_event(&state, &shared, &reader, thumbnail.clone()).await;
+        assert_eq!(wire_data(second).as_deref(), Some(expected));
+        // a fresh mapping would no longer find the series
+        let fresh = SseShared::new(SseIntervals::default());
+        let remapped = map_recorded_event(&state, &fresh, &reader, thumbnail).await;
+        assert_eq!(
+            wire_data(remapped).as_deref(),
+            Some("{\"bookId\":\"b1\",\"seriesId\":\"\",\"selected\":true}")
+        );
+
+        // the admin's mapping of an admin-only event doesn't reach other users
+        let imported = record(
+            &state,
+            DomainEvent::BookImported {
+                book: None,
+                source_file: "/import/a.cbz".into(),
+                success: false,
+                message: None,
+            },
+        )
+        .await;
+        assert!(
+            map_recorded_event(&state, &shared, &admin, imported.clone())
+                .await
+                .is_some()
+        );
+        assert!(map_recorded_event(&state, &shared, &reader, imported)
+            .await
+            .is_none());
+    }
+
+    /// Admin connections share one task count per interval instead of each running it.
+    #[tokio::test]
+    async fn task_count_is_shared_within_the_interval() {
+        let state = test_state();
+        let shared = SseShared::new(SseIntervals {
+            heartbeat: Duration::from_secs(15),
+            task_status: Duration::from_millis(300),
+        });
+        let count = || async {
+            shared
+                .task_counts
+                .try_get_with((), count_tasks(&state))
+                .await
+                .unwrap()
+                .count
+        };
+
+        assert_eq!(count().await, 0);
+        state
+            .task_emitter
+            .submit(komga_core::task::Task::scan_library("l1", false, 4))
+            .unwrap();
+        // within the interval every connection gets the same snapshot
+        assert_eq!(count().await, 0);
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        assert_eq!(count().await, 1);
     }
 }
