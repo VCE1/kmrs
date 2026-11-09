@@ -306,46 +306,41 @@ async fn resolve_session_and_remember(
 
     // 4. remember-me cookie
     if let Some(token) = cookie_value(parts, remember_me::REMEMBER_ME_COOKIE) {
-        use base64::Engine;
         let now_millis = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
         if let Ok(Some(key)) = state.settings.get_setting("REMEMBER_ME_KEY") {
-            if let Some(decoded) = base64::engine::general_purpose::STANDARD
-                .decode(&token)
-                .ok()
-                .and_then(|b| String::from_utf8(b).ok())
-            {
-                if let Some(email) = decoded.split(':').next() {
-                    if let Ok(Some(user)) = user_dao.find_by_email_ignore_case(email) {
-                        if remember_me::decode_token(&token, &user, &key, now_millis).is_some() {
-                            let activity = ActivityDraft {
-                                user_id: Some(user.id.clone()),
-                                email: Some(user.email.clone()),
+            if let Some(parsed) = remember_me::parse_token(&token) {
+                if let Ok(Some(user)) = user_dao.find_by_email_ignore_case(&parsed.email) {
+                    if remember_me::verify(&parsed, &user, &key, now_millis) {
+                        let activity = ActivityDraft {
+                            user_id: Some(user.id.clone()),
+                            email: Some(user.email.clone()),
+                            api_key_id: None,
+                            api_key_comment: None,
+                            success: true,
+                            error: None,
+                            source: "RememberMe".into(),
+                        };
+                        return Outcome {
+                            new_session_id: state
+                                .sessions
+                                .create(&user.id)
+                                .map_err(|e| {
+                                    tracing::warn!(
+                                        "failed to persist session, continuing without one: {e}"
+                                    )
+                                })
+                                .ok(),
+                            auth: Some(Auth {
+                                user,
+                                source: AuthSource::RememberMe,
                                 api_key_id: None,
-                                api_key_comment: None,
-                                success: true,
-                                error: None,
-                                source: "RememberMe".into(),
-                            };
-                            return Outcome {
-                                new_session_id: state
-                                    .sessions
-                                    .create(&user.id)
-                                    .map_err(|e| {
-                                        tracing::warn!("failed to persist session, continuing without one: {e}")
-                                    })
-                                    .ok(),
-                                auth: Some(Auth {
-                                    user,
-                                    source: AuthSource::RememberMe,
-                                    api_key_id: None,
-                                    session_id: None,
-                                }),
-                                activity: Some(activity),
-                            };
-                        }
+                                session_id: None,
+                            }),
+                            activity: Some(activity),
+                        };
                     }
                 }
             }

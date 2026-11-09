@@ -409,6 +409,10 @@ pub fn build_router(state: AppState) -> axum::Router {
             state.clone(),
             auth::auth_middleware,
         ))
+        // outside auth, so 401s get the headers too
+        .layer(axum::middleware::from_fn(
+            http::security_headers::security_headers_middleware,
+        ))
         .layer(TraceLayer::new_for_http())
         .layer(axum::middleware::from_fn(http::offload::offload_middleware));
 
@@ -425,9 +429,11 @@ async fn shutdown_signal(
     mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
     shutdown_tx: tokio::sync::watch::Sender<bool>,
 ) {
-    // launchd stops a login item with SIGTERM: at logout, and when Open at Login
-    // is turned off while the login item runs the server
-    #[cfg(target_os = "macos")]
+    // SIGTERM is how the system asks the server to stop: `docker stop` (where kmrs
+    // runs as PID 1, so an unhandled SIGTERM is ignored and Docker kills it after
+    // its timeout), systemd, and launchd at logout or when Open at Login is
+    // turned off while the login item runs the server
+    #[cfg(unix)]
     let terminate = async {
         match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
             Ok(mut signal) => {
@@ -439,7 +445,7 @@ async fn shutdown_signal(
             }
         }
     };
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
