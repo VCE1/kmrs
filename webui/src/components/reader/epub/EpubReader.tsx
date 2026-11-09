@@ -20,6 +20,7 @@ import { alignLocatorHref, buildEpubPreferences, CJK_OPTIMAL_LINE_LENGTH, EPUB_B
 import { EpubChrome } from './EpubChrome'
 import { EpubSettingsPanel } from './EpubSettingsPanel'
 import { EpubTocDrawer } from './EpubTocDrawer'
+import { CoverLightbox } from '@/components/media/CoverLightbox'
 
 // stored on the progression record and shown as the device in sync clients
 const DEVICE = { id: 'kmweb', name: 'kmweb' }
@@ -46,6 +47,7 @@ export function EpubReader({ book }: { book: BookDto }) {
   const [chromeVisible, setChromeVisible] = useState(false)
   const [tocOpen, setTocOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [lightboxImage, setLightboxImage] = useState<{ src: string; title: string } | null>(null)
 
   const progressTimer = useRef<number | undefined>(undefined)
   const pendingLocator = useRef<Locator | null>(null)
@@ -121,7 +123,75 @@ export function EpubReader({ book }: { book: BookDto }) {
 
       // the interface marks every listener required; tap/click/handleLocator return false to keep the default behavior
       const listeners: EpubNavigatorListeners = {
-        frameLoaded: () => {},
+        frameLoaded: (wnd: Window) => {
+          try {
+            const doc = wnd.document
+            if (!doc) return
+
+            // Inject cursor style for illustrations
+            const style = doc.createElement('style')
+            style.textContent = `
+              img, image, svg image {
+                cursor: zoom-in !important;
+              }
+            `
+            doc.head?.appendChild(style)
+
+            // Capture clicks on illustrations and open full-featured lightbox
+            doc.addEventListener(
+              'click',
+              (e: MouseEvent) => {
+                const target = e.target as HTMLElement | SVGElement | null
+                if (!target) return
+
+                let rawSrc: string | null = null
+                let alt: string | null = null
+
+                const imgEl = (target.tagName.toLowerCase() === 'img'
+                  ? target
+                  : target.closest('img')) as HTMLImageElement | null
+                if (imgEl) {
+                  rawSrc = imgEl.currentSrc || imgEl.src || imgEl.getAttribute('src')
+                  alt = imgEl.alt || imgEl.getAttribute('title')
+                } else {
+                  const svgImageEl = (target.tagName.toLowerCase() === 'image'
+                    ? target
+                    : target.closest('image') || (target.tagName.toLowerCase() === 'svg' ? target.querySelector('image') : null)) as SVGImageElement | null
+                  if (svgImageEl) {
+                    rawSrc =
+                      svgImageEl.getAttribute('href') ||
+                      svgImageEl.getAttribute('xlink:href') ||
+                      svgImageEl.getAttributeNS('http://www.w3.org/1999/xlink', 'href')
+                    alt = svgImageEl.getAttribute('title') || target.closest('svg')?.getAttribute('aria-label') || null
+                  }
+                }
+
+                if (rawSrc) {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  e.stopImmediatePropagation?.()
+
+                  let resolvedSrc = rawSrc
+                  try {
+                    resolvedSrc = new URL(rawSrc, doc.baseURI || wnd.location.href).href
+                  } catch {}
+
+                  const bookTitle = book.metadata.title || book.name
+                  const cleanAlt = alt?.trim()
+                  const finalTitle = cleanAlt ? `${bookTitle} - ${cleanAlt}` : `${bookTitle} - 插画`
+
+                  setLightboxImage({
+                    src: resolvedSrc,
+                    title: finalTitle,
+                  })
+                }
+              },
+              true,
+            )
+          } catch (err) {
+            console.warn('[EpubReader] Failed to attach illustration click listener:', err)
+          }
+        },
         positionChanged: (locator) => {
           setCurrentLocator(locator)
           setPosition(positionOf(locator, positions))
@@ -222,6 +292,7 @@ export function EpubReader({ book }: { book: BookDto }) {
   }, [])
 
   useWindowKeys((e) => {
+    if (lightboxImage) return
     if (e.key === 'Escape') {
       if (tocOpen) setTocOpen(false)
       else if (settingsOpen) setSettingsOpen(false)
@@ -333,6 +404,13 @@ export function EpubReader({ book }: { book: BookDto }) {
             open={settingsOpen}
             onAlwaysFullscreenChange={nav.onAlwaysFullscreenChange}
             onClose={() => setSettingsOpen(false)}
+          />
+
+          <CoverLightbox
+            open={!!lightboxImage}
+            src={lightboxImage?.src ?? ''}
+            title={lightboxImage?.title}
+            onClose={() => setLightboxImage(null)}
           />
         </>
       )}

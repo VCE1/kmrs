@@ -9,6 +9,7 @@ import {
   ArrowSquareOut,
   ArrowsInSimple,
   ArrowsOutSimple,
+  DownloadSimple,
 } from '@phosphor-icons/react'
 
 export interface CoverLightboxProps {
@@ -70,6 +71,33 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
     setOffset({ x: 0, y: 0 })
   }, [])
 
+  const handleDownload = useCallback(async () => {
+    try {
+      const res = await fetch(src, { credentials: 'include' })
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const mimeExt = blob.type.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg'
+      const cleanTitle = (title || 'illustration').replace(/[/\\?%*:|"<>]/g, '_')
+      a.download = cleanTitle.toLowerCase().endsWith(`.${mimeExt}`)
+        ? cleanTitle
+        : `${cleanTitle}.${mimeExt}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch {
+      const a = document.createElement('a')
+      a.href = src
+      a.download = `${title || 'illustration'}.jpg`
+      a.target = '_blank'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    }
+  }, [src, title])
+
   // Keyboard navigation
   useEffect(() => {
     if (!open) return
@@ -79,6 +107,7 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
       else if (e.key === '-' || e.key === '_') handleZoomOut()
       else if (e.key === '0') handleReset()
       else if (e.key === 'r' || e.key === 'R') handleRotate()
+      else if (e.key === 's' || e.key === 'S') handleDownload()
       else if (e.key === 'ArrowLeft' && zoom > 1) setOffset((o) => ({ ...o, x: o.x + 40 }))
       else if (e.key === 'ArrowRight' && zoom > 1) setOffset((o) => ({ ...o, x: o.x - 40 }))
       else if (e.key === 'ArrowUp' && zoom > 1) setOffset((o) => ({ ...o, y: o.y + 40 }))
@@ -86,7 +115,7 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose, handleZoomIn, handleZoomOut, handleReset, handleRotate, zoom])
+  }, [open, onClose, handleZoomIn, handleZoomOut, handleReset, handleRotate, handleDownload, zoom])
 
   // Non-passive wheel listener for smooth and reliable wheel zoom
   useEffect(() => {
@@ -187,6 +216,14 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="Save / Download (s)"
+                      onClick={handleDownload}
+                      className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-white/80 transition hover:bg-white/15 hover:text-white"
+                    >
+                      <DownloadSimple className="size-4" />
+                    </button>
                     <button
                       type="button"
                       title="Open Original Image"
@@ -290,6 +327,15 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
                     className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
                   >
                     <ArrowClockwise className="size-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    title="Save / Download (s)"
+                    onClick={handleDownload}
+                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
+                  >
+                    <DownloadSimple className="size-4" />
                   </button>
                 </div>
               </motion.div>
