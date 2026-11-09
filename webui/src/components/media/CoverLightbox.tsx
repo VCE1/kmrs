@@ -10,7 +10,6 @@ import {
   ArrowsInSimple,
   ArrowsOutSimple,
 } from '@phosphor-icons/react'
-import { IconButton } from '@/components/ui/IconButton'
 
 export interface CoverLightboxProps {
   open: boolean
@@ -26,9 +25,11 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [imgSize, setImgSize] = useState<{ width: number; height: number } | null>(null)
+
+  const viewportRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
 
-  // Reset transform when opened or image changes
+  // Reset transforms whenever modal opens or image src changes
   useEffect(() => {
     if (open) {
       setZoom(1)
@@ -39,12 +40,12 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
   }, [open, src])
 
   const handleZoomIn = useCallback(() => {
-    setZoom((z) => Math.min(z + 0.25, 4))
+    setZoom((z) => Math.min(Number((z + 0.25).toFixed(2)), 5))
   }, [])
 
   const handleZoomOut = useCallback(() => {
     setZoom((z) => {
-      const next = Math.max(z - 0.25, 0.5)
+      const next = Math.max(Number((z - 0.25).toFixed(2)), 0.5)
       if (next <= 1) setOffset({ x: 0, y: 0 })
       return next
     })
@@ -75,41 +76,67 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
       else if (e.key === '+' || e.key === '=') handleZoomIn()
-      else if (e.key === '-') handleZoomOut()
+      else if (e.key === '-' || e.key === '_') handleZoomOut()
       else if (e.key === '0') handleReset()
       else if (e.key === 'r' || e.key === 'R') handleRotate()
+      else if (e.key === 'ArrowLeft' && zoom > 1) setOffset((o) => ({ ...o, x: o.x + 40 }))
+      else if (e.key === 'ArrowRight' && zoom > 1) setOffset((o) => ({ ...o, x: o.x - 40 }))
+      else if (e.key === 'ArrowUp' && zoom > 1) setOffset((o) => ({ ...o, y: o.y + 40 }))
+      else if (e.key === 'ArrowDown' && zoom > 1) setOffset((o) => ({ ...o, y: o.y - 40 }))
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [open, onClose, handleZoomIn, handleZoomOut, handleReset, handleRotate])
+  }, [open, onClose, handleZoomIn, handleZoomOut, handleReset, handleRotate, zoom])
 
-  // Mouse wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    if (e.deltaY < 0) {
-      handleZoomIn()
-    } else {
-      handleZoomOut()
+  // Non-passive wheel listener for smooth and reliable wheel zoom
+  useEffect(() => {
+    if (!open) return
+    const el = viewportRef.current
+    if (!el) return
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const factor = e.deltaY < 0 ? 1.15 : 0.87
+      setZoom((z) => {
+        const next = Math.min(Math.max(Number((z * factor).toFixed(2)), 0.5), 5.0)
+        if (next <= 1) setOffset({ x: 0, y: 0 })
+        return next
+      })
     }
-  }
 
-  // Drag pan handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [open])
+
+  // Drag pan handlers using Pointer Events with PointerCapture
+  const handlePointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
     if (zoom <= 1) return
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
     setIsDragging(true)
     setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y })
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLImageElement>) => {
     if (!isDragging) return
+    e.preventDefault()
+    e.stopPropagation()
     setOffset({
       x: e.clientX - dragStart.x,
       y: e.clientY - dragStart.y,
     })
   }
 
-  const handleMouseUp = () => {
-    setIsDragging(false)
+  const handlePointerUp = (e: React.PointerEvent<HTMLImageElement>) => {
+    if (isDragging) {
+      setIsDragging(false)
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {}
+    }
   }
 
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -129,115 +156,143 @@ export function CoverLightbox({ open, onClose, src, title }: CoverLightboxProps)
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.18 }}
+                transition={{ duration: 0.15 }}
+                onClick={onClose}
               />
             </RadixDialog.Overlay>
 
             <RadixDialog.Content asChild>
-              <div
-                className="fixed inset-0 z-50 flex flex-col items-center justify-between p-3 sm:p-5"
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onWheel={handleWheel}
+              <motion.div
+                className="fixed inset-0 z-50 flex flex-col items-center justify-between pointer-events-auto p-3 sm:p-5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
               >
-                {/* Header Toolbar */}
-                <motion.header
-                  className="z-10 flex w-full max-w-5xl items-center justify-between rounded-xl border border-white/10 bg-black/60 px-4 py-2 text-white/90 backdrop-blur-md shadow-lg"
-                  initial={{ opacity: 0, y: -16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -16 }}
+                <RadixDialog.Title className="sr-only">{title || 'Cover Viewer'}</RadixDialog.Title>
+                <RadixDialog.Description className="sr-only">Full-screen cover lightbox</RadixDialog.Description>
+
+                {/* Top Header */}
+                <div
+                  className="z-20 flex w-full max-w-4xl items-center justify-between rounded-xl border border-white/10 bg-black/60 px-4 py-2.5 text-white/90 backdrop-blur-md shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex min-w-0 items-center gap-3">
-                    <p className="truncate text-sm font-medium">{title || 'Cover Viewer'}</p>
+                    <p className="truncate text-sm font-medium">{title || 'Cover'}</p>
                     {imgSize && (
                       <span className="hidden rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-white/70 sm:inline-block">
                         {imgSize.width} × {imgSize.height}
                       </span>
                     )}
-                    <span className="rounded bg-white/10 px-2 py-0.5 text-xs font-mono text-white/70">
-                      {Math.round(zoom * 100)}%
-                    </span>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1">
-                    <IconButton label="Zoom Out" onClick={handleZoomOut} className="text-white/80 hover:text-white">
-                      <MagnifyingGlassMinus className="size-4" />
-                    </IconButton>
-                    <IconButton label="Zoom In" onClick={handleZoomIn} className="text-white/80 hover:text-white">
-                      <MagnifyingGlassPlus className="size-4" />
-                    </IconButton>
-                    <IconButton
-                      label={zoom === 1 ? 'Zoom 200%' : 'Fit to Screen'}
-                      onClick={handleToggleFit}
-                      className="text-white/80 hover:text-white"
-                    >
-                      {zoom === 1 ? <ArrowsOutSimple className="size-4" /> : <ArrowsInSimple className="size-4" />}
-                    </IconButton>
-                    <IconButton label="Rotate" onClick={handleRotate} className="text-white/80 hover:text-white">
-                      <ArrowClockwise className="size-4" />
-                    </IconButton>
-                    <IconButton
-                      label="Open Original"
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="Open Original Image"
                       onClick={() => window.open(src, '_blank')}
-                      className="text-white/80 hover:text-white"
+                      className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-white/80 transition hover:bg-white/15 hover:text-white"
                     >
                       <ArrowSquareOut className="size-4" />
-                    </IconButton>
-                    <div className="mx-1 h-4 w-px bg-white/20" />
-                    <IconButton label="Close" onClick={onClose} className="text-white/80 hover:text-white hover:bg-white/10">
-                      <X className="size-4" />
-                    </IconButton>
+                    </button>
+                    <RadixDialog.Close asChild>
+                      <button
+                        type="button"
+                        title="Close (Esc)"
+                        onClick={onClose}
+                        className="inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-white/80 transition hover:bg-white/15 hover:text-white"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </RadixDialog.Close>
                   </div>
-                </motion.header>
+                </div>
 
                 {/* Viewport Area */}
                 <div
+                  ref={viewportRef}
                   className="relative flex flex-1 w-full items-center justify-center overflow-hidden cursor-default"
                   onClick={(e) => {
-                    // Click on background closes viewer
                     if (e.target === e.currentTarget) onClose()
                   }}
                 >
-                  <motion.div
-                    className="relative flex items-center justify-center touch-none"
-                    initial={{ opacity: 0, scale: 0.92 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.92 }}
-                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  {/* Clean native img with zero Framer-Motion transform conflict */}
+                  <img
+                    ref={imgRef}
+                    src={src}
+                    alt={title || 'Cover'}
+                    draggable={false}
+                    onLoad={handleImageLoad}
                     style={{
                       transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${zoom}) rotate(${rotation}deg)`,
+                      transformOrigin: 'center center',
+                      transition: isDragging ? 'none' : 'transform 0.15s cubic-bezier(0.2, 0, 0, 1)',
                       cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
                     }}
-                    onMouseDown={handleMouseDown}
+                    className="max-h-[78vh] max-w-[85vw] rounded-lg object-contain shadow-2xl ring-1 ring-white/10 select-none touch-none"
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerCancel={handlePointerUp}
                     onDoubleClick={handleToggleFit}
-                  >
-                    <img
-                      ref={imgRef}
-                      src={src}
-                      alt={title || 'Cover'}
-                      draggable={false}
-                      onLoad={handleImageLoad}
-                      className="max-h-[82vh] max-w-[88vw] rounded-lg object-contain shadow-2xl ring-1 ring-white/10"
-                    />
-                  </motion.div>
+                  />
                 </div>
 
-                {/* Bottom hint bar */}
-                <motion.div
-                  className="hidden text-xs text-white/50 sm:flex items-center gap-4 py-1"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
+                {/* Floating Bottom Control Pill Toolbar */}
+                <div
+                  className="z-20 flex items-center gap-1 sm:gap-2 rounded-full border border-white/15 bg-black/75 px-3 py-1.5 text-white/90 backdrop-blur-md shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <span>滚轮缩放</span>
-                  <span>·</span>
-                  <span>双击放大 / 还原</span>
-                  <span>·</span>
-                  <span>拖拽平移</span>
-                  <span>·</span>
-                  <span>Esc 退出</span>
-                </motion.div>
-              </div>
+                  <button
+                    type="button"
+                    title="Zoom Out (-)"
+                    onClick={handleZoomOut}
+                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
+                  >
+                    <MagnifyingGlassMinus className="size-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    title="Reset to 100% (0)"
+                    onClick={handleReset}
+                    className="px-2 py-0.5 text-xs font-mono font-medium rounded-full text-white/90 hover:bg-white/15 transition cursor-pointer"
+                  >
+                    {Math.round(zoom * 100)}%
+                  </button>
+
+                  <button
+                    type="button"
+                    title="Zoom In (+)"
+                    onClick={handleZoomIn}
+                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
+                  >
+                    <MagnifyingGlassPlus className="size-4" />
+                  </button>
+
+                  <div className="h-4 w-px bg-white/20 mx-0.5" />
+
+                  <button
+                    type="button"
+                    title={zoom === 1 ? 'Zoom 200%' : 'Fit to Screen'}
+                    onClick={handleToggleFit}
+                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
+                  >
+                    {zoom === 1 ? <ArrowsOutSimple className="size-4" /> : <ArrowsInSimple className="size-4" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    title="Rotate 90° (r)"
+                    onClick={handleRotate}
+                    className="inline-flex size-8 cursor-pointer items-center justify-center rounded-full text-white/80 transition hover:bg-white/20 hover:text-white active:scale-95"
+                  >
+                    <ArrowClockwise className="size-4" />
+                  </button>
+                </div>
+              </motion.div>
             </RadixDialog.Content>
           </RadixDialog.Portal>
         )}
