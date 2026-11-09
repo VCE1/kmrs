@@ -49,16 +49,19 @@ impl ApiKeyActivityThrottle {
     }
 
     /// True when this success should be recorded: first sighting of the key, or the
-    /// previous record is older than the throttle window.
-    pub(crate) fn should_record(&self, api_key_id: &str, now: std::time::Instant) -> bool {
+    /// previous record is older than the throttle window. Recording drops the keys whose
+    /// window has passed: password keys include the IP and user agent, so without that
+    /// the map would only grow.
+    pub(crate) fn should_record(&self, key: &str, now: std::time::Instant) -> bool {
         let mut last = self.last.lock().unwrap();
-        match last.get(api_key_id) {
-            Some(&t) if now.saturating_duration_since(t) < self.window => false,
-            _ => {
-                last.insert(api_key_id.to_string(), now);
-                true
+        if let Some(&t) = last.get(key) {
+            if now.saturating_duration_since(t) < self.window {
+                return false;
             }
         }
+        last.retain(|_, &mut t| now.saturating_duration_since(t) < self.window);
+        last.insert(key.to_string(), now);
+        true
     }
 
     #[cfg(test)]
@@ -555,6 +558,20 @@ mod tests {
         // keys are throttled independently
         assert!(throttle.should_record("k2", t0 + Duration::from_secs(10)));
         assert!(throttle.should_record("k1", t0 + Duration::from_secs(3600)));
+    }
+
+    #[test]
+    fn activity_throttle_drops_keys_past_the_window() {
+        let throttle = ApiKeyActivityThrottle::new();
+        let t0 = Instant::now();
+
+        assert!(throttle.should_record("password:u1:10.0.0.1:reader", t0));
+        assert!(throttle.should_record("password:u1:10.0.0.2:reader", t0 + Duration::from_secs(10)));
+        assert!(throttle.should_record("k1", t0 + Duration::from_secs(3605)));
+        // only the key recorded within the window is still tracked
+        let last = throttle.last.lock().unwrap();
+        assert_eq!(last.len(), 2);
+        assert!(!last.contains_key("password:u1:10.0.0.1:reader"));
     }
 
     #[test]
