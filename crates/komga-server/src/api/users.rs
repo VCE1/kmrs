@@ -714,6 +714,159 @@ mod tests {
         activity_count(state, user_id, email).await
     }
 
+    fn basic_request(credentials: &str, session: Option<(&str, &str)>) -> Request<Body> {
+        let mut builder = Request::builder()
+            .method("GET")
+            .uri("/api/v2/users/me")
+            .header(
+                "Authorization",
+                format!(
+                    "Basic {}",
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, credentials)
+                ),
+            );
+        if let Some((name, value)) = session {
+            builder = builder.header(name, value);
+        }
+        builder.body(Body::empty()).unwrap()
+    }
+
+    /// Spring's BasicAuthenticationFilter skips re-authentication when the session already
+    /// holds the same user: Basic sent together with that session keeps it (header or cookie,
+    /// email in any case), with no new session, no session header or cookie in the response
+    /// and no activity row.
+    #[tokio::test]
+    async fn basic_with_own_session_reuses_it() {
+        let (state, _rx) = test_state();
+        let user_id = seed_user(&state, "Admin@Example.com");
+        let session_id = state.sessions.create(&user_id).unwrap();
+        let cookie = format!("{}={session_id}", crate::auth::SESSION_COOKIE_NAME);
+        let app = test_router(state.clone());
+
+        for session in [
+            ("X-Auth-Token", session_id.as_str()),
+            ("Cookie", cookie.as_str()),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(basic_request("admin@example.com:pass", Some(session)))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert!(response.headers().get("x-auth-token").is_none());
+            assert!(response.headers().get("set-cookie").is_none());
+        }
+        assert_eq!(state.sessions.all().unwrap().len(), 1);
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert_eq!(
+            activity_count(&state, &user_id, "Admin@Example.com").await,
+            0
+        );
+    }
+
+    /// A session that belongs to someone else, or no longer exists, doesn't stand in for the
+    /// credentials: Basic re-authenticates and issues a new session. An empty `X-Auth-Token`
+    /// is how clients such as KMReader ask for the session id on login.
+    #[tokio::test]
+    async fn basic_with_foreign_or_unknown_session_reauthenticates() {
+        let (state, _rx) = test_state();
+        let user_id = seed_user(&state, "admin@example.com");
+        let other_id = UserDao::new(state.db.clone())
+            .insert(&KomgaUser {
+                id: String::new(),
+                email: "other@example.com".into(),
+                password: bcrypt::hash("other", 4).unwrap(),
+                roles: BTreeSet::new(),
+                shared_libraries_ids: BTreeSet::new(),
+                shared_all_libraries: true,
+                restrictions: ContentRestrictions::default(),
+                created_date: now_utc(),
+                last_modified_date: now_utc(),
+            })
+            .unwrap();
+        let other_session = state.sessions.create(&other_id).unwrap();
+        let app = test_router(state.clone());
+
+        for session in [other_session.as_str(), "unknown-session", ""] {
+            let response = app
+                .clone()
+                .oneshot(basic_request(
+                    "admin@example.com:pass",
+                    Some(("X-Auth-Token", session)),
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let issued = response
+                .headers()
+                .get("x-auth-token")
+                .expect("a new session")
+                .to_str()
+                .unwrap();
+            assert_ne!(issued, session);
+            let stored = state.sessions.get(issued).unwrap().expect("stored");
+            assert_eq!(stored.user_id, user_id);
+        }
+        // three successes from the same device collapse into one throttled row
+        assert_eq!(
+            settled_activity_count(&state, &user_id, "admin@example.com", 1).await,
+            1
+        );
+    }
+
+    /// Successful password logins are recorded once per user and device per window, like
+    /// API keys per key: a client sending Basic on every request doesn't flood the activity,
+    /// while a login from another device is still recorded right away.
+    #[tokio::test]
+    async fn password_activity_is_throttled_per_device() {
+        let (state, _rx) = test_state();
+        let user_id = seed_user(&state, "admin@example.com");
+        let app = test_router(state.clone());
+
+        for agent in ["reader/1", "reader/1", "browser/2"] {
+            let mut request = basic_request("admin@example.com:pass", None);
+            request
+                .headers_mut()
+                .insert("User-Agent", agent.parse().unwrap());
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+        assert_eq!(
+            settled_activity_count(&state, &user_id, "admin@example.com", 2).await,
+            2
+        );
+    }
+
+    /// Clients that log in with Basic alone (KMReader keeps the returned token) still get a
+    /// session, and wrong credentials are still rejected without one.
+    #[tokio::test]
+    async fn basic_without_session_still_issues_one() {
+        let (state, _rx) = test_state();
+        seed_user(&state, "admin@example.com");
+        let app = test_router(state.clone());
+
+        let response = app
+            .clone()
+            .oneshot(basic_request("admin@example.com:pass", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let cookie = response
+            .headers()
+            .get("set-cookie")
+            .expect("a session cookie")
+            .to_str()
+            .unwrap();
+        assert!(cookie.starts_with(&format!("{}=", crate::auth::SESSION_COOKIE_NAME)));
+
+        let response = app
+            .oneshot(basic_request("admin@example.com:wrong", None))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(state.sessions.all().unwrap().len(), 1);
+    }
+
     /// 1.29 made API-key authentication stateless (request-scoped SecurityContext, no session
     /// persistence): a session presented alongside the key neither suppresses re-authentication
     /// nor is marked with the key. Repeated successes with the same key collapse into a single

@@ -155,23 +155,37 @@ impl AppState {
         parts: &axum::http::request::Parts,
     ) {
         let Some(draft) = activity else { return };
-        if draft.success && draft.source == crate::auth::SOURCE_API_KEY {
-            if let Some(key_id) = &draft.api_key_id {
-                if !self
-                    .api_key_activity_throttle
-                    .should_record(key_id, std::time::Instant::now())
-                {
-                    return;
-                }
-            }
-        }
-        let db = self.db.clone();
         let ip = client_ip(parts);
         let user_agent = parts
             .headers
             .get(axum::http::header::USER_AGENT)
             .and_then(|v| v.to_str().ok())
             .map(str::to_string);
+        if draft.success {
+            // API keys throttle per key; password logins per user and device, so a login
+            // from a new device is still recorded right away (key ids are UUIDs, so the
+            // prefixed password keys can't collide with them)
+            let throttle_key = match draft.source.as_str() {
+                crate::auth::SOURCE_API_KEY => draft.api_key_id.clone(),
+                crate::auth::SOURCE_PASSWORD => draft.user_id.as_ref().map(|user_id| {
+                    format!(
+                        "password:{user_id}:{}:{}",
+                        ip.as_deref().unwrap_or_default(),
+                        user_agent.as_deref().unwrap_or_default()
+                    )
+                }),
+                _ => None,
+            };
+            if let Some(key) = throttle_key {
+                if !self
+                    .api_key_activity_throttle
+                    .should_record(&key, std::time::Instant::now())
+                {
+                    return;
+                }
+            }
+        }
+        let db = self.db.clone();
         let draft = crate::auth::ActivityDraft {
             user_id: draft.user_id.clone(),
             email: draft.email.clone(),
