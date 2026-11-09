@@ -92,8 +92,18 @@ fn load(pdfium: &'static Pdfium, path: &Path) -> Result<PdfDocument<'static>> {
     if !path.exists() {
         return Err(MediaError::NoSuchFile(path.display().to_string()));
     }
-    // Prefer native file loading directly via pdfium C API; fallback to reader if needed
-    if let Ok(doc) = pdfium.load_pdf_from_file(path, None) {
+    let mut bytes = std::fs::read(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            MediaError::NoSuchFile(path.display().to_string())
+        } else {
+            MediaError::unsupported(format!("could not open pdf document: {e}"))
+        }
+    })?;
+    if bytes.starts_with(b"\xef\xbb\xbf") {
+        bytes.drain(..3);
+    }
+    // Prefer memory-backed loading directly via FPDF_LoadMemDocument64; fallback to reader if needed
+    if let Ok(doc) = pdfium.load_pdf_from_byte_vec(bytes, None) {
         return Ok(doc);
     }
     let file = std::fs::File::open(path).map_err(|e| {
