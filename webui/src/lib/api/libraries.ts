@@ -1,9 +1,11 @@
 import { api } from './client'
-import type { LibraryCreationDto, LibraryDto, LibraryUpdateDto } from './types'
+import type { LibraryBrowseDto, LibraryCreationDto, LibraryDto, LibraryUpdateDto } from './types'
 
 export const librariesApi = {
   list: () => api.get<LibraryDto[]>('/api/v1/libraries'),
   get: (libraryId: string) => api.get<LibraryDto>(`/api/v1/libraries/${libraryId}`),
+  browse: (libraryId: string, path?: string) =>
+    api.get<LibraryBrowseDto>(`/api/v1/libraries/${libraryId}/browse`, path ? { path } : undefined),
 
   // Admin operations
   create: (body: LibraryCreationDto) => api.post<LibraryDto>('/api/v1/libraries', body),

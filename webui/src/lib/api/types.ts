@@ -72,6 +72,29 @@ export interface LibraryDto {
   oneshotsDirectory?: string | null
 }
 
+export interface BreadcrumbDto {
+  name: string
+  path: string
+}
+
+export interface DirectoryDto {
+  name: string
+  path: string
+  subDirectoryCount: number
+  seriesCount: number
+  bookCount: number
+  sampleSeriesId?: string | null
+}
+
+export interface LibraryBrowseDto {
+  libraryId: string
+  libraryName: string
+  currentPath: string
+  breadcrumbs: BreadcrumbDto[]
+  directories: DirectoryDto[]
+  series: SeriesDto[]
+}
+
 /** All fields optional except name/root; omitted fields fall back to server defaults. */
 export interface LibraryCreationDto {
   name: string
