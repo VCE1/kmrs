@@ -920,21 +920,28 @@ fn get_pdf_pages(book_path: &Path, analyze_dimensions: bool) -> Result<Vec<BookP
     let document = pdf::open_document(book_path)?;
     let mut pages = vec![];
     for index in 0..document.pages().len() {
-        let page = document
-            .pages()
-            .get(index)
-            .map_err(|e| MediaError::unsupported(format!("could not get pdf page {index}: {e}")))?;
-        let dimension = if analyze_dimensions {
-            let (w, h) = crop_box_size(&page);
-            Some((w.round() as i32, h.round() as i32))
-        } else {
-            None
+        let (page_w, page_h) = match document.pages().get(index) {
+            Ok(page) => {
+                if analyze_dimensions {
+                    let (w, h) = crop_box_size(&page);
+                    (Some(w.round() as i32), Some(h.round() as i32))
+                } else {
+                    (None, None)
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "could not get pdf page {index} for {}: {e}",
+                    book_path.display()
+                );
+                (None, None)
+            }
         };
         pages.push(BookPage {
             file_name: (index + 1).to_string(),
             media_type: String::new(),
-            width: dimension.map(|d| d.0),
-            height: dimension.map(|d| d.1),
+            width: page_w,
+            height: page_h,
             file_hash: String::new(),
             file_size: None,
         });

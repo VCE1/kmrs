@@ -89,7 +89,13 @@ pub fn pdf_available() -> bool {
 }
 
 fn load(pdfium: &'static Pdfium, path: &Path) -> Result<PdfDocument<'static>> {
-    // opened here rather than `load_pdf_from_file` so a missing file maps to NoSuchFile
+    if !path.exists() {
+        return Err(MediaError::NoSuchFile(path.display().to_string()));
+    }
+    // Prefer native file loading directly via pdfium C API; fallback to reader if needed
+    if let Ok(doc) = pdfium.load_pdf_from_file(path, None) {
+        return Ok(doc);
+    }
     let file = std::fs::File::open(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             MediaError::NoSuchFile(path.display().to_string())

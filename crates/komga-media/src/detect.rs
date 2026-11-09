@@ -28,6 +28,7 @@ pub const IMAGE_JP2: &str = "image/jp2";
 
 /// `ContentDetector.detectMediaType(InputStream)`: detects from content only.
 pub fn detect_media_type(bytes: &[u8]) -> String {
+    let bytes = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes);
     if bytes.len() >= 4 && &bytes[0..4] == b"PK\x03\x04" {
         return detect_zip_container(bytes);
     }
