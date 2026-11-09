@@ -104,5 +104,19 @@
     "deleteSeriesFiles_one": "File deletion queued for {{count}} series",
     "deleteSeriesFiles_other": "File deletion queued for {{count}} series",
     "deleteFilesFailed": "{{failed}} of {{total}} failed"
+  },
+  "viewModes": {
+    "grid": "Grid View",
+    "folder": "Folder View"
+  },
+  "directory": {
+    "root": "Root",
+    "parent": "Up one level",
+    "subfolders": "{{count}} folders",
+    "empty": "No subdirectories or series in this folder",
+    "subfoldersSection": "Folders",
+    "seriesSection": "Series in this folder",
+    "bookCount": "{{count}} books",
+    "seriesCount": "{{count}} series"
   }
 }

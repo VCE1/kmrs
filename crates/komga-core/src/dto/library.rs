@@ -1,8 +1,38 @@
 //! `LibraryDto.kt`, `ScanIntervalDto.kt`, `SeriesCoverDto.kt`.
 
+use crate::dto::series::SeriesDto;
 use crate::model::library::{Library, ScanInterval, SeriesCover};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryBrowseDto {
+    pub library_id: String,
+    pub library_name: String,
+    pub current_path: String,
+    pub breadcrumbs: Vec<BreadcrumbDto>,
+    pub directories: Vec<DirectoryDto>,
+    pub series: Vec<SeriesDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreadcrumbDto {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryDto {
+    pub name: String,
+    pub path: String,
+    pub sub_directory_count: usize,
+    pub series_count: usize,
+    pub book_count: usize,
+    pub sample_series_id: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -4,7 +4,8 @@ use crate::auth::RequireAuth;
 use crate::dto::library::{LibraryCreationDto, LibraryUpdateDto};
 use crate::error::{ApiError, Violation};
 use crate::state::AppState;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+use serde::Deserialize;
 use axum::http::StatusCode;
 use axum::{routing, Json, Router};
 use komga_core::dto::library::LibraryDto;
@@ -45,6 +46,10 @@ pub fn router() -> Router<AppState> {
         .route(
             "/api/v1/libraries/{libraryId}/empty-trash",
             routing::post(library_empty_trash),
+        )
+        .route(
+            "/api/v1/libraries/{libraryId}/browse",
+            routing::get(browse_library_directory),
         )
 }
 
@@ -362,6 +367,135 @@ fn books_of_library(
         &komga_core::search::SearchContext::default(),
         &[],
     )
+}
+
+#[derive(Deserialize, Debug)]
+pub struct BrowseQuery {
+    pub path: Option<String>,
+}
+
+#[derive(Default)]
+struct FolderAccumulator {
+    series_count: usize,
+    book_count: usize,
+    sub_folder_names: std::collections::HashSet<String>,
+    sample_series_id: Option<String>,
+}
+
+async fn browse_library_directory(
+    State(state): State<AppState>,
+    auth: RequireAuth,
+    Path(library_id): Path<String>,
+    Query(query): Query<BrowseQuery>,
+) -> Result<Json<komga_core::dto::library::LibraryBrowseDto>, ApiError> {
+    let user = &auth.0.user;
+    if !user.can_access_library(&library_id) {
+        return Err(ApiError::forbidden("You don't have access to this library"));
+    }
+    let library = LibraryDao::new(state.db.clone())
+        .find_by_id(&library_id)?
+        .ok_or_else(|| ApiError::not_found("Library not found"))?;
+
+    let library_path = komga_core::dto::url_to_file_path(&library.root);
+    let all_series = SeriesDao::new(state.db.clone()).find_by_library_id(&library_id)?;
+
+    let target_path = query.path.as_deref().unwrap_or("").trim_matches('/');
+    let target_parts: Vec<&str> = if target_path.is_empty() {
+        vec![]
+    } else {
+        target_path.split('/').filter(|p| !p.is_empty()).collect()
+    };
+    let target_len = target_parts.len();
+
+    let mut direct_series_ids: Vec<String> = vec![];
+    let mut subdirectories: std::collections::HashMap<String, FolderAccumulator> =
+        std::collections::HashMap::new();
+
+    for s in all_series {
+        if s.deleted_date.is_some() {
+            continue;
+        }
+        let s_path = komga_core::dto::url_to_file_path(&s.url);
+        let rel_path = if let Some(stripped) = s_path.strip_prefix(&library_path) {
+            stripped.trim_matches('/')
+        } else {
+            s_path.trim_matches('/')
+        };
+
+        let parts: Vec<&str> = if rel_path.is_empty() {
+            vec![]
+        } else {
+            rel_path.split('/').filter(|p| !p.is_empty()).collect()
+        };
+
+        if parts.len() >= target_len && parts[..target_len] == target_parts[..] {
+            if parts.len() == target_len {
+                direct_series_ids.push(s.id);
+            } else {
+                let next_folder = parts[target_len].to_string();
+                let entry = subdirectories.entry(next_folder).or_default();
+                entry.series_count += 1;
+                entry.book_count += s.book_count as usize;
+                if entry.sample_series_id.is_none() {
+                    entry.sample_series_id = Some(s.id);
+                }
+                if parts.len() > target_len + 1 {
+                    entry.sub_folder_names.insert(parts[target_len + 1].to_string());
+                }
+            }
+        }
+    }
+
+    let mut breadcrumbs = vec![komga_core::dto::library::BreadcrumbDto {
+        name: library.name.clone(),
+        path: String::new(),
+    }];
+    let mut accum = String::new();
+    for part in &target_parts {
+        if accum.is_empty() {
+            accum.push_str(part);
+        } else {
+            accum.push('/');
+            accum.push_str(part);
+        }
+        breadcrumbs.push(komga_core::dto::library::BreadcrumbDto {
+            name: part.to_string(),
+            path: accum.clone(),
+        });
+    }
+
+    let mut directories: Vec<komga_core::dto::library::DirectoryDto> = subdirectories
+        .into_iter()
+        .map(|(name, stats)| {
+            let sub_path = if target_path.is_empty() {
+                name.clone()
+            } else {
+                format!("{}/{}", target_path, name)
+            };
+            komga_core::dto::library::DirectoryDto {
+                name,
+                path: sub_path,
+                sub_directory_count: stats.sub_folder_names.len(),
+                series_count: stats.series_count,
+                book_count: stats.book_count,
+                sample_series_id: stats.sample_series_id,
+            }
+        })
+        .collect();
+    directories.sort_by_key(|d| d.name.to_lowercase());
+
+    let mut series_dtos = komga_db::dto_dao::series::SeriesDtoDao::new(state.db.clone())
+        .find_all_by_ids(&direct_series_ids, &user.id)?;
+    series_dtos.sort_by_key(|s| s.metadata.title_sort.to_lowercase());
+
+    Ok(Json(komga_core::dto::library::LibraryBrowseDto {
+        library_id: library.id,
+        library_name: library.name,
+        current_path: target_path.to_string(),
+        breadcrumbs,
+        directories,
+        series: series_dtos,
+    }))
 }
 
 #[cfg(test)]
@@ -972,5 +1106,24 @@ mod tests {
             .request_json("POST", "/api/v1/libraries/l1/scan", "k-user", None)
             .await;
         assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn browse_empty_library() {
+        let app = app();
+        let admin = insert_user(&app.state.db, "admin@x.c", true, true, &[]);
+        let key = "k-admin";
+        insert_api_key(&app.state.db, &admin, key);
+
+        let lib_id = "lib-browse";
+        insert_library(&app.state.db, lib_id, "file:/data/books");
+
+        let (status, body) = app.get_json(&format!("/api/v1/libraries/{lib_id}/browse"), key).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["libraryId"], lib_id);
+        assert_eq!(body["currentPath"], "");
+        assert_eq!(body["breadcrumbs"].as_array().unwrap().len(), 1);
+        assert_eq!(body["directories"].as_array().unwrap().len(), 0);
+        assert_eq!(body["series"].as_array().unwrap().len(), 0);
     }
 }

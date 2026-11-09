@@ -85,5 +85,19 @@
     "deleteBooksFiles_other": "已为 {{count}} 本书排队删除文件",
     "deleteSeriesFiles_other": "已为 {{count}} 个系列排队删除文件",
     "deleteFilesFailed": "{{total}} 项中有 {{failed}} 项失败"
+  },
+  "viewModes": {
+    "grid": "平铺网格",
+    "folder": "目录层级"
+  },
+  "directory": {
+    "root": "根目录",
+    "parent": "返回上级",
+    "subfolders": "{{count}} 个子目录",
+    "empty": "当前目录下暂无子目录或系列",
+    "subfoldersSection": "子目录",
+    "seriesSection": "当前目录系列",
+    "bookCount": "{{count}} 本书",
+    "seriesCount": "{{count}} 个系列"
   }
 }
