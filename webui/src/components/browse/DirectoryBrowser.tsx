@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -33,10 +34,12 @@ function DirectoryCard({
   onNavigate: (path: string) => void
 }) {
   const { t } = useTranslation('browse')
+  const [imgError, setImgError] = useState(false)
   const secondary =
     dir.subDirectoryCount > 0
       ? `${t('directory.bookCount', { count: dir.bookCount })} · ${t('directory.subfolders', { count: dir.subDirectoryCount })}`
       : t('directory.bookCount', { count: dir.bookCount })
+  const showCover = !!dir.sampleSeriesId && !imgError
 
   return (
     <CardFrame
@@ -54,12 +57,13 @@ function DirectoryCard({
         }}
       >
         <div className="cover-aspect relative w-full overflow-hidden rounded-lg bg-surface border border-line/40 transition-all duration-300 group-hover:border-accent/40 group-hover:shadow-card-hover group-hover:brightness-105">
-          {dir.sampleSeriesId ? (
+          {showCover ? (
             <>
               <img
-                src={urls.seriesThumbnail(dir.sampleSeriesId)}
+                src={urls.seriesThumbnail(dir.sampleSeriesId!)}
                 alt={dir.name}
                 loading="lazy"
+                onError={() => setImgError(true)}
                 className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/20" />
@@ -69,11 +73,9 @@ function DirectoryCard({
             </>
           ) : (
             <div className="flex size-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-raised to-surface text-ink-3">
-              <FolderSimple
-                size={48}
-                weight="duotone"
-                className="text-accent/80 transition-transform duration-300 group-hover:scale-110"
-              />
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-accent/10 text-accent transition-transform duration-300 group-hover:scale-110 shadow-inner">
+                <FolderSimple size={36} weight="duotone" />
+              </div>
             </div>
           )}
 
