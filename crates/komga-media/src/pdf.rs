@@ -102,8 +102,11 @@ fn load(pdfium: &'static Pdfium, path: &Path) -> Result<PdfDocument<'static>> {
     if bytes.starts_with(b"\xef\xbb\xbf") {
         bytes.drain(..3);
     }
+    // Try opening without password first, fallback to empty string password for owner-protected PDFs.
+    let bytes_clone = bytes.clone();
     pdfium
         .load_pdf_from_byte_vec(bytes, None)
+        .or_else(|_| pdfium.load_pdf_from_byte_vec(bytes_clone, Some("")))
         .map_err(|e| {
             tracing::error!("load_pdf_from_byte_vec failed for {}: {e:?}", path.display());
             MediaError::unsupported(format!("could not open pdf document: {e:?}"))
