@@ -1,12 +1,14 @@
 //! Login/logout:
 //! - `GET /api/v1/login/set-cookie`: materializes the X-Auth-Token session into a cookie (204).
-//! - `GET|POST /api/logout`: clears the session cookie and invalidates the session (204).
+//! - `GET|POST /api/logout`: clears the session and remember-me cookies and invalidates the
+//!   session (204).
 
+use crate::auth::remember_me::REMEMBER_ME_COOKIE;
 use crate::auth::{MaybeAuth, RequireAuth, SESSION_COOKIE_NAME, SESSION_HEADER_NAME};
 use crate::state::AppState;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
+use axum::response::{AppendHeaders, IntoResponse, Response};
 use axum::{routing, Router};
 
 pub fn router() -> Router<AppState> {
@@ -61,12 +63,20 @@ async fn logout(State(state): State<AppState>, auth: MaybeAuth, headers: HeaderM
         }
     }
     let _ = auth;
+    // the remember-me cookie is HttpOnly, so only the server can drop it; left in
+    // place, it would log the browser straight back in on the next request
     (
         StatusCode::NO_CONTENT,
-        [(
-            axum::http::header::SET_COOKIE,
-            format!("{SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
-        )],
+        AppendHeaders([
+            (
+                axum::http::header::SET_COOKIE,
+                format!("{SESSION_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
+            ),
+            (
+                axum::http::header::SET_COOKIE,
+                format!("{REMEMBER_ME_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"),
+            ),
+        ]),
     )
         .into_response()
 }
@@ -109,5 +119,30 @@ mod tests {
             cookie.contains(&format!("{SESSION_COOKIE_NAME}=session-1")),
             "{cookie}"
         );
+    }
+
+    #[tokio::test]
+    async fn logout_clears_session_and_remember_me_cookies() {
+        let state = test_state();
+        let (status, headers, _) = call(
+            &state,
+            router(),
+            Request::post("/api/logout").body(Body::empty()).unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let cookies: Vec<&str> = headers
+            .get_all(axum::http::header::SET_COOKIE)
+            .iter()
+            .map(|v| v.to_str().unwrap())
+            .collect();
+        for name in [SESSION_COOKIE_NAME, REMEMBER_ME_COOKIE] {
+            assert!(
+                cookies
+                    .iter()
+                    .any(|c| c.starts_with(&format!("{name}=;")) && c.contains("Max-Age=0")),
+                "{name} not cleared: {cookies:?}"
+            );
+        }
     }
 }

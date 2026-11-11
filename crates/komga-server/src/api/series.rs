@@ -1216,6 +1216,7 @@ mod tests {
             allow_file_deletion: true,
             log_level: None,
             sort_locale: None,
+            trusted_proxies: Default::default(),
             thumbnail_storage: Default::default(),
             thumbnail_deep_etag: true,
         };

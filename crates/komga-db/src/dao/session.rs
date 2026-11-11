@@ -154,6 +154,21 @@ impl SessionDao {
             .map_err(Into::into)
     }
 
+    /// Deletes a principal's sessions beyond its `keep` most recently used ones (ties by
+    /// creation, then insertion order). Immortal sessions are neither counted nor deleted.
+    pub fn delete_least_recently_used(&self, principal: &str, keep: usize) -> Result<u64> {
+        let conn = self.db.rw()?;
+        let deleted = conn.execute(
+            "DELETE FROM SPRING_SESSION WHERE PRIMARY_ID IN ( \
+               SELECT PRIMARY_ID FROM SPRING_SESSION \
+               WHERE PRINCIPAL_NAME = ? AND MAX_INACTIVE_INTERVAL >= 0 \
+               ORDER BY LAST_ACCESS_TIME DESC, CREATION_TIME DESC, ROWID DESC \
+               LIMIT -1 OFFSET ?)",
+            params![principal, keep as i64],
+        )?;
+        Ok(deleted as u64)
+    }
+
     /// Hourly expired-session cleanup (`cleanup-cron: "0 0 * * * *"`).
     pub fn delete_expired(&self, now_millis: i64) -> Result<u64> {
         let conn = self.db.rw()?;

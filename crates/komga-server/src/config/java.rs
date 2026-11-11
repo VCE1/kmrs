@@ -181,7 +181,7 @@ impl JavaConfig {
             if let Some(v) = &server.forward_headers_strategy {
                 if !v.eq_ignore_ascii_case("framework") {
                     tracing::warn!(
-                        "server.forward-headers-strategy={v:?}: kmrs always applies the framework strategy"
+                        "server.forward-headers-strategy={v:?}: kmrs always reads the forwarded headers, X-Forwarded-For only from server.trusted-proxies"
                     );
                 }
             }
@@ -197,6 +197,7 @@ impl JavaConfig {
                 session_timeout: servlet.session.and_then(|s| s.timeout),
                 jdbc_session_enabled: None,
                 sort_locale: None,
+                trusted_proxies: None,
             });
         }
 

@@ -25,6 +25,15 @@ use std::time::Duration;
 pub const SESSION_COOKIE_NAME: &str = "KOMGA-SESSION";
 pub const SESSION_HEADER_NAME: &str = "X-Auth-Token";
 
+/// Stored sessions kept per user by the JDBC store; creating one more drops the least
+/// recently used. Far above what a user's own devices and browsers hold, it only bounds
+/// clients that log in on every request without sending the session back.
+const MAX_SESSIONS_PER_USER: usize = 50;
+
+/// Sessions the in-memory store holds in total (a few MB); beyond that the least
+/// recently used is evicted and its client logs in again.
+const MAX_MEMORY_SESSIONS: u64 = 10_000;
+
 #[derive(Clone)]
 pub struct SessionData {
     pub user_id: String,
@@ -64,8 +73,14 @@ fn timeout_secs(timeout: Duration) -> i64 {
 }
 
 enum StoreInner {
-    Memory { cache: Cache<String, SessionData> },
-    Jdbc { dao: SessionDao, timeout: Duration },
+    Memory {
+        cache: Cache<String, SessionData>,
+    },
+    Jdbc {
+        dao: SessionDao,
+        timeout: Duration,
+        max_per_user: usize,
+    },
 }
 
 #[derive(Clone)]
@@ -75,20 +90,35 @@ pub struct SessionStore {
 
 impl SessionStore {
     pub fn new(timeout: Duration) -> Self {
+        Self::memory(timeout, MAX_MEMORY_SESSIONS)
+    }
+
+    fn memory(timeout: Duration, capacity: u64) -> Self {
         Self {
-            // sliding expiration (time_to_idle = expire after access)
             inner: std::sync::Arc::new(StoreInner::Memory {
-                cache: Cache::builder().time_to_idle(timeout).build(),
+                // sliding expiration (time_to_idle = expire after access). LRU rather than
+                // moka's default TinyLFU: its admission filter can turn away a brand-new
+                // key when the cache is full, which would drop a fresh login's session.
+                cache: Cache::builder()
+                    .time_to_idle(timeout)
+                    .max_capacity(capacity)
+                    .eviction_policy(moka::policy::EvictionPolicy::lru())
+                    .build(),
             }),
         }
     }
 
     /// JDBC backend over `sessions.sqlite`, used when `jdbc-session-enabled=true`.
     pub fn jdbc(db: Database, timeout: Duration) -> Self {
+        Self::jdbc_with_limit(db, timeout, MAX_SESSIONS_PER_USER)
+    }
+
+    fn jdbc_with_limit(db: Database, timeout: Duration, max_per_user: usize) -> Self {
         Self {
             inner: std::sync::Arc::new(StoreInner::Jdbc {
                 dao: SessionDao::new(db),
                 timeout,
+                max_per_user,
             }),
         }
     }
@@ -108,7 +138,11 @@ impl SessionStore {
                 );
                 Ok(id)
             }
-            StoreInner::Jdbc { dao, timeout } => {
+            StoreInner::Jdbc {
+                dao,
+                timeout,
+                max_per_user,
+            } => {
                 let id = uuid::Uuid::new_v4().to_string();
                 let primary_id = uuid::Uuid::new_v4().to_string();
                 let now = now_millis() as i64;
@@ -120,6 +154,11 @@ impl SessionStore {
                     user_id,
                     &SessionPayload::encode(user_id),
                 )?;
+                // the new session is the most recently used, so it is always kept; a failed
+                // trim only leaves extra rows for the expiry cleanup
+                if let Err(e) = dao.delete_least_recently_used(user_id, *max_per_user) {
+                    tracing::warn!("failed to trim the sessions of user {user_id}: {e}");
+                }
                 Ok(id)
             }
         }
@@ -138,7 +177,7 @@ impl SessionStore {
             }
             // `findById`: an expired row is deleted and reads as missing, a live
             // one has its sliding expiration refreshed.
-            StoreInner::Jdbc { dao, timeout } => {
+            StoreInner::Jdbc { dao, timeout, .. } => {
                 let Some(row) = dao.find_by_id(id)? else {
                     return Ok(None);
                 };
@@ -352,5 +391,58 @@ mod tests {
         assert_eq!(store.cleanup_expired().unwrap(), 1);
         assert!(store.all().unwrap().is_empty());
         assert_eq!(store.cleanup_expired().unwrap(), 0);
+    }
+
+    /// Timestamps are millis: step past one between operations so the order is real.
+    fn tick() {
+        std::thread::sleep(Duration::from_millis(3));
+    }
+
+    #[test]
+    fn jdbc_keeps_the_most_recently_used_sessions_per_user() {
+        let db = Database::open_in_memory(false).unwrap();
+        let migrations = komga_db::sessions_migrations();
+        komga_db::Migrator::new(&migrations, komga_db::Placeholders::default())
+            .migrate(&db.rw().unwrap())
+            .unwrap();
+        let store = SessionStore::jdbc_with_limit(db, Duration::from_secs(60), 3);
+
+        let other = store.create("u2").unwrap();
+        let s1 = store.create("u1").unwrap();
+        tick();
+        let s2 = store.create("u1").unwrap();
+        tick();
+        let s3 = store.create("u1").unwrap();
+        tick();
+        // using s1 makes s2 the least recently used
+        store.get(&s1).unwrap().unwrap();
+        tick();
+        let s4 = store.create("u1").unwrap();
+
+        assert!(store.get(&s2).unwrap().is_none());
+        for id in [&s1, &s3, &s4, &other] {
+            assert!(store.get(id).unwrap().is_some(), "{id} should be kept");
+        }
+        assert_eq!(store.all().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn memory_store_is_bounded_and_admits_new_sessions() {
+        let store = SessionStore::memory(Duration::from_secs(60), 2);
+        let s1 = store.create("u1").unwrap();
+        let s2 = store.create("u1").unwrap();
+        // using s1 makes s2 the least recently used
+        store.get(&s1).unwrap().unwrap();
+        let s3 = store.create("u2").unwrap();
+
+        let StoreInner::Memory { cache } = &*store.inner else {
+            unreachable!()
+        };
+        cache.run_pending_tasks();
+        assert_eq!(cache.entry_count(), 2);
+        // a fresh login is never turned away, and the least recently used one goes
+        assert!(store.get(&s3).unwrap().is_some());
+        assert!(store.get(&s1).unwrap().is_some());
+        assert!(store.get(&s2).unwrap().is_none());
     }
 }
