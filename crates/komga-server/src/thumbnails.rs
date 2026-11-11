@@ -154,6 +154,13 @@ pub fn migrate_blobs_to_files(state: &AppState) -> komga_db::Result<()> {
     let dir = thumbnails_dir(&state.config.config_dir);
     let markers = ThumbnailMigrationDao::new(state.kmrs_db.clone());
     let mut migrated_total = 0u64;
+
+    // Ensure partial indexes exist so cursor pagination on blob rows runs in sub-milliseconds
+    let _ = state.task_db.rw()?.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx__thumbnail_book__has_blob ON THUMBNAIL_BOOK (ID) WHERE THUMBNAIL IS NOT NULL;\
+         CREATE INDEX IF NOT EXISTS idx__thumbnail_series__has_blob ON THUMBNAIL_SERIES (ID) WHERE THUMBNAIL IS NOT NULL;"
+    );
+
     for kind in [ThumbnailKind::Book, ThumbnailKind::Series] {
         if markers.is_done(kind.as_str())? {
             continue;
@@ -165,9 +172,12 @@ pub fn migrate_blobs_to_files(state: &AppState) -> komga_db::Result<()> {
                 kind,
                 &markers,
                 |after, limit| {
-                    ThumbnailBookDao::new(state.task_db.clone()).find_with_blob_batch(after, limit)
+                    ThumbnailBookDao::new(state.task_db.clone())
+                        .find_with_blob_batch_id(after, limit)
                 },
-                |thumbnail| ThumbnailBookDao::new(state.task_db.clone()).update(thumbnail),
+                |thumbnails| {
+                    ThumbnailBookDao::new(state.task_db.clone()).update_batch(thumbnails)
+                },
             )?,
             ThumbnailKind::Series => migrate_kind(
                 &dir,
@@ -175,9 +185,11 @@ pub fn migrate_blobs_to_files(state: &AppState) -> komga_db::Result<()> {
                 &markers,
                 |after, limit| {
                     ThumbnailSeriesDao::new(state.task_db.clone())
-                        .find_with_blob_batch(after, limit)
+                        .find_with_blob_batch_id(after, limit)
                 },
-                |thumbnail| ThumbnailSeriesDao::new(state.task_db.clone()).update(thumbnail),
+                |thumbnails| {
+                    ThumbnailSeriesDao::new(state.task_db.clone()).update_batch(thumbnails)
+                },
             )?,
         };
         migrated_total += migrated;
@@ -202,23 +214,24 @@ pub fn migrate_blobs_to_files(state: &AppState) -> komga_db::Result<()> {
 
 const VACUUM_MARKER: &str = "vacuum";
 
-fn migrate_kind<T: BlobThumbnail>(
+fn migrate_kind<T: BlobThumbnail + Clone>(
     dir: &Path,
     kind: ThumbnailKind,
     markers: &ThumbnailMigrationDao,
-    mut fetch: impl FnMut(i64, u32) -> komga_db::Result<Vec<(i64, T)>>,
-    mut update: impl FnMut(&T) -> komga_db::Result<u64>,
+    mut fetch: impl FnMut(&str, u32) -> komga_db::Result<Vec<T>>,
+    mut update_batch: impl FnMut(&[T]) -> komga_db::Result<u64>,
 ) -> komga_db::Result<u64> {
     let mut migrated = 0u64;
     let mut seen = 0u64;
-    let mut after_rowid = 0i64;
+    let mut after_id = String::new();
     loop {
-        let batch = fetch(after_rowid, MIGRATION_BATCH_SIZE)?;
+        let batch = fetch(&after_id, MIGRATION_BATCH_SIZE)?;
         if batch.is_empty() {
             break;
         }
-        for (rowid, mut thumbnail) in batch {
-            after_rowid = rowid;
+        let mut to_update = Vec::with_capacity(batch.len());
+        for mut thumbnail in batch {
+            after_id = thumbnail.id().to_string();
             seen += 1;
             if seen.is_multiple_of(MIGRATION_PROGRESS_LOG_INTERVAL) {
                 tracing::info!(
@@ -231,39 +244,22 @@ fn migrate_kind<T: BlobThumbnail>(
             };
             match write(dir, kind, thumbnail.id(), thumbnail.media_type(), &bytes) {
                 Ok(url) => {
-                    thumbnail.set_url(url.clone());
-                    match update(&thumbnail) {
-                        Ok(1) => migrated += 1,
-                        Ok(_) => {
-                            // the row was deleted concurrently: the just-written file
-                            // has no owner, remove it instead of leaking it
-                            tracing::warn!(
-                                "{} thumbnail {} vanished during migration, removing its file",
-                                kind.as_str(),
-                                thumbnail.id()
-                            );
-                            if let Err(e) = remove_url_if_managed(dir, &url) {
-                                tracing::warn!(
-                                    "could not remove the file of vanished {} thumbnail {}: {e}",
-                                    kind.as_str(),
-                                    thumbnail.id()
-                                );
-                            }
-                        }
-                        // the row keeps its blob (still readable); the unreferenced file
-                        // is reclaimed by the sweep
-                        Err(e) => tracing::warn!(
-                            "could not update {} thumbnail {} after writing its file: {e}",
-                            kind.as_str(),
-                            thumbnail.id()
-                        ),
-                    }
+                    thumbnail.set_url(url);
+                    to_update.push(thumbnail);
                 }
                 Err(e) => tracing::warn!(
                     "could not migrate {} thumbnail {} to a file, keeping the blob: {e}",
                     kind.as_str(),
                     thumbnail.id()
                 ),
+            }
+        }
+        if !to_update.is_empty() {
+            match update_batch(&to_update) {
+                Ok(n) => migrated += n,
+                Err(e) => {
+                    tracing::warn!("could not batch update {} thumbnails: {e}", kind.as_str())
+                }
             }
         }
     }
