@@ -94,6 +94,9 @@ pub struct FileServer {
     /// Session JDBC) instead of per-node in-memory storage
     pub jdbc_session_enabled: Option<bool>,
     pub sort_locale: Option<String>,
+    /// reverse proxies whose X-Forwarded-For is honored, as addresses and CIDR ranges;
+    /// None = loopback and the private ranges, an empty list = none
+    pub trusted_proxies: Option<Vec<String>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -325,6 +328,19 @@ pub fn render(file: &FileConfig, config: &ServerConfig, source: Option<&Path>) -
         format!(
             "sort-locale = {} # env: KOMGA_SORT_LOCALE; BCP47 language tag for ICU sorting (e.g. \"zh-CN\"), empty/absent = root collation",
             q(config.sort_locale.as_deref().unwrap_or(""))
+        ),
+    );
+    push_line(
+        &mut out,
+        fserver.and_then(|s| s.trusted_proxies.as_ref()).is_some(),
+        format!(
+            "trusted-proxies = {} # env: KOMGA_TRUSTED_PROXIES (comma-separated; none = trust no one); reverse proxies whose X-Forwarded-For is honored, as addresses or CIDR ranges; from any other peer the header is ignored and the connection's address is used. Default: loopback and the private ranges; a list replaces it, and [] trusts no one",
+            match fserver.and_then(|s| s.trusted_proxies.as_deref()) {
+                Some(entries) => str_list(entries),
+                None => str_list(
+                    &crate::http::client_addr::DEFAULT_TRUSTED_PROXIES.map(str::to_string)
+                ),
+            }
         ),
     );
     out.push('\n');

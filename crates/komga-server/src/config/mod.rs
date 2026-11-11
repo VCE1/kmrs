@@ -93,6 +93,10 @@ pub struct ServerConfig {
     /// BCP47 locale for ICU-based sorting (authors, publishers, genres, tags, ...);
     /// None/empty = `und` (UCA root), reproducing the legacy hard-coded behavior.
     pub sort_locale: Option<String>,
+    /// reverse proxies whose X-Forwarded-For names the client address; from any other peer
+    /// the header is ignored (kmrs enhancement; Java honors it from anyone). Loopback and the
+    /// private ranges unless configured
+    pub trusted_proxies: crate::http::client_addr::TrustedProxies,
     /// substituted into the SQL migrations
     pub migration_placeholders: Placeholders,
 }
@@ -308,6 +312,21 @@ impl ServerConfig {
             .or_else(|| server.and_then(|s| s.sort_locale.clone()))
             .filter(|v| !v.is_empty());
 
+        // an explicit list replaces the default, an empty one included. A variable without
+        // entries counts as unset like the others (compose files pass unfilled variables
+        // through empty), so the environment spells the empty list `none`
+        let trusted_proxies = match env_list(env, "KOMGA_TRUSTED_PROXIES")
+            .filter(|entries| !entries.is_empty())
+            .map(|entries| match entries.as_slice() {
+                [only] if only.eq_ignore_ascii_case("none") => Vec::new(),
+                _ => entries,
+            })
+            .or_else(|| server.and_then(|s| s.trusted_proxies.clone()))
+        {
+            Some(entries) => crate::http::client_addr::TrustedProxies::parse(&entries)?,
+            None => crate::http::client_addr::TrustedProxies::private_networks(),
+        };
+
         let cors_allowed_origins = env_list(env, "KOMGA_CORS_ALLOWEDORIGINS")
             .or_else(|| {
                 file.and_then(|f| f.cors.as_ref())
@@ -340,6 +359,7 @@ impl ServerConfig {
                 .unwrap_or(true),
             session_timeout,
             sort_locale,
+            trusted_proxies,
             cors_allowed_origins,
             page_hashing: env_u32(env, "KOMGA_PAGEHASHING")
                 .or_else(|| {
@@ -1343,6 +1363,92 @@ issuer-uri = "https://github.com"
             &env(&[("KOMGA_THUMBNAILS_DEEPETAG", "true")]),
         );
         assert!(config.thumbnail_deep_etag);
+    }
+
+    #[test]
+    fn trusted_proxies_from_env_and_file() {
+        use crate::http::client_addr::TrustedProxies;
+        let parsed = |entries: &[&str]| {
+            let entries: Vec<String> = entries.iter().map(|e| e.to_string()).collect();
+            TrustedProxies::parse(&entries).unwrap()
+        };
+        // default: loopback and the private ranges
+        let config = resolve("", Cli::default(), &[]);
+        assert_eq!(config.trusted_proxies, TrustedProxies::private_networks());
+        // file value: addresses and CIDR ranges, replacing the default
+        let toml = "[server]\ntrusted-proxies = [\"127.0.0.1\", \"fd00::/8\"]\n";
+        let config = resolve(toml, Cli::default(), &[]);
+        assert_eq!(config.trusted_proxies, parsed(&["127.0.0.1", "fd00::/8"]));
+        // env var wins over the file
+        let config = resolve(
+            toml,
+            Cli::default(),
+            &env(&[("KOMGA_TRUSTED_PROXIES", "10.0.0.0/8, 192.0.2.4")]),
+        );
+        assert_eq!(config.trusted_proxies, parsed(&["10.0.0.0/8", "192.0.2.4"]));
+        // an explicit empty list trusts no one: `[]` in the file, `none` in the env var
+        let config = resolve("[server]\ntrusted-proxies = []\n", Cli::default(), &[]);
+        assert_eq!(config.trusted_proxies, TrustedProxies::default());
+        for value in ["none", "NONE", " None "] {
+            let config = resolve(
+                toml,
+                Cli::default(),
+                &env(&[("KOMGA_TRUSTED_PROXIES", value)]),
+            );
+            assert_eq!(config.trusted_proxies, TrustedProxies::default());
+        }
+        // an env var without entries counts as unset: the file value, else the default
+        for value in ["", " ", ","] {
+            let unset = env(&[("KOMGA_TRUSTED_PROXIES", value)]);
+            let config = resolve(toml, Cli::default(), &unset);
+            assert_eq!(config.trusted_proxies, parsed(&["127.0.0.1", "fd00::/8"]));
+            let config = resolve("", Cli::default(), &unset);
+            assert_eq!(config.trusted_proxies, TrustedProxies::private_networks());
+        }
+        // `none` stands alone: next to other entries it is an invalid address
+        let error = ServerConfig::resolve(
+            None,
+            &Cli::default(),
+            &env(&[("KOMGA_TRUSTED_PROXIES", "none, 10.0.0.0/8")]),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("server.trusted-proxies"));
+    }
+
+    #[test]
+    fn rendered_config_keeps_unset_and_empty_trusted_proxies_apart() {
+        use crate::http::client_addr::TrustedProxies;
+        let round_trip = |toml: &str| {
+            let file: FileConfig = toml::from_str(toml).unwrap();
+            let config = ServerConfig::resolve(Some(&file), &Cli::default(), &[]).unwrap();
+            let rendered = file::render(&file, &config, None);
+            let reparsed: FileConfig = toml::from_str(&rendered).unwrap();
+            let config = ServerConfig::resolve(Some(&reparsed), &Cli::default(), &[]).unwrap();
+            (rendered, config.trusted_proxies)
+        };
+        // unset: the default is shown commented out and still applies
+        let (rendered, proxies) = round_trip("");
+        assert!(rendered.contains("\n# trusted-proxies = [\"127.0.0.0/8\", "));
+        assert_eq!(proxies, TrustedProxies::private_networks());
+        // explicitly empty: written out, and still empty
+        let (rendered, proxies) = round_trip("[server]\ntrusted-proxies = []\n");
+        assert!(rendered.contains("\ntrusted-proxies = [] #"));
+        assert_eq!(proxies, TrustedProxies::default());
+        // an explicit list is written out as given
+        let (rendered, proxies) = round_trip("[server]\ntrusted-proxies = [\"192.0.2.4\"]\n");
+        assert!(rendered.contains("\ntrusted-proxies = [\"192.0.2.4\"] #"));
+        assert_eq!(
+            proxies,
+            TrustedProxies::parse(&["192.0.2.4".to_string()]).unwrap()
+        );
+    }
+
+    #[test]
+    fn invalid_trusted_proxy_is_rejected() {
+        let file: FileConfig =
+            toml::from_str("[server]\ntrusted-proxies = [\"proxy.local\"]").unwrap();
+        let error = ServerConfig::resolve(Some(&file), &Cli::default(), &[]).unwrap_err();
+        assert!(error.to_string().contains("server.trusted-proxies"));
     }
 
     #[test]

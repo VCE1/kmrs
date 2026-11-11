@@ -867,6 +867,53 @@ mod tests {
         assert_eq!(state.sessions.all().unwrap().len(), 1);
     }
 
+    /// The recorded address is the connection's own unless it comes from a trusted proxy:
+    /// only then does `X-Forwarded-For` name the client, read from the proxy's end.
+    #[tokio::test]
+    async fn activity_address_honors_forwarded_for_only_from_trusted_proxies() {
+        let (mut state, _rx) = test_state();
+        state.config = std::sync::Arc::new(crate::config::ServerConfig {
+            trusted_proxies: crate::http::client_addr::TrustedProxies::parse(&[
+                "10.0.0.0/8".to_string()
+            ])
+            .unwrap(),
+            ..(*state.config).clone()
+        });
+        seed_user(&state, "admin@example.com");
+        let app = test_router(state.clone());
+
+        for (peer, user_agent) in [("203.0.113.9", "direct"), ("10.0.0.2", "proxied")] {
+            let mut request = basic_request("admin@example.com:wrong", None);
+            let headers = request.headers_mut();
+            headers.insert("User-Agent", user_agent.parse().unwrap());
+            headers.insert("X-Forwarded-For", "1.1.1.1, 198.51.100.7".parse().unwrap());
+            let peer = std::net::SocketAddr::new(peer.parse().unwrap(), 40000);
+            request
+                .extensions_mut()
+                .insert(axum::extract::ConnectInfo(peer));
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        let dao = UserDao::new(state.db.clone());
+        let mut recorded = Vec::new();
+        for _ in 0..100 {
+            recorded = dao.find_all_activities(None, 0).unwrap().0;
+            if recorded.len() >= 2 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        let address_of = |user_agent: &str| {
+            recorded
+                .iter()
+                .find(|activity| activity.user_agent.as_deref() == Some(user_agent))
+                .and_then(|activity| activity.ip.clone())
+        };
+        assert_eq!(address_of("direct").as_deref(), Some("203.0.113.9"));
+        assert_eq!(address_of("proxied").as_deref(), Some("198.51.100.7"));
+    }
+
     /// 1.29 made API-key authentication stateless (request-scoped SecurityContext, no session
     /// persistence): a session presented alongside the key neither suppresses re-authentication
     /// nor is marked with the key. Repeated successes with the same key collapse into a single

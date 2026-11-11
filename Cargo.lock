@@ -2040,6 +2040,7 @@ dependencies = [
  "http-body",
  "http-body-util",
  "image",
+ "ipnet",
  "komga-core",
  "komga-db",
  "komga-media",

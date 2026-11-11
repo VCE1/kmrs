@@ -155,7 +155,8 @@ impl AppState {
         parts: &axum::http::request::Parts,
     ) {
         let Some(draft) = activity else { return };
-        let ip = client_ip(parts);
+        let ip = crate::http::client_addr::client_ip(parts, &self.config.trusted_proxies)
+            .map(|ip| ip.to_string());
         let user_agent = parts
             .headers
             .get(axum::http::header::USER_AGENT)
@@ -213,20 +214,4 @@ impl AppState {
             }
         });
     }
-}
-
-/// `forward-headers-strategy: framework`: prefers the first hop of X-Forwarded-For.
-fn client_ip(parts: &axum::http::request::Parts) -> Option<String> {
-    parts
-        .headers
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .map(|s| s.trim().to_string())
-        .or_else(|| {
-            parts
-                .extensions
-                .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
-                .map(|ci| ci.0.ip().to_string())
-        })
 }
