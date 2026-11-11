@@ -135,6 +135,10 @@ pub fn stored_thumbnail_response(
                 axum::http::header::ETAG,
                 HeaderValue::from_str(etag).unwrap(),
             );
+            response.headers_mut().insert(
+                axum::http::header::CACHE_CONTROL,
+                HeaderValue::from_static("max-age=3600, private"),
+            );
             return Ok(response);
         }
     }
@@ -145,6 +149,10 @@ pub fn stored_thumbnail_response(
     response.headers_mut().insert(
         axum::http::header::CONTENT_TYPE,
         HeaderValue::from_static("image/jpeg"),
+    );
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("max-age=3600, private"),
     );
     if let Some(etag) = etag {
         response.headers_mut().insert(

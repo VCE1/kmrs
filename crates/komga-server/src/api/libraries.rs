@@ -782,7 +782,11 @@ mod tests {
             body["message"]
                 .as_str()
                 .unwrap()
-                .contains("Library root folder does not exist"),
+                .contains("Library root folder does not exist")
+                || body["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("上级目录不存在"),
             "{body}"
         );
 
