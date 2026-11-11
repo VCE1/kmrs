@@ -8,8 +8,6 @@ use axum::{routing, Json, Router};
 use komga_core::model::catalog::{
     CatalogCategory, CatalogNodeDto, CatalogPageDto, CatalogSeriesDto,
 };
-use komga_core::model::series::Series;
-use komga_core::time_codec::now_utc;
 use komga_db::dao::catalog::CatalogDao;
 use komga_db::dao::library::LibraryDao;
 use komga_db::dao::series::SeriesDao;

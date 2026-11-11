@@ -262,6 +262,47 @@ impl ThumbnailBookDao {
         Ok(rows)
     }
 
+    /// Blob-backed rows in ID order, using index for sub-millisecond cursor pagination.
+    pub fn find_with_blob_batch_id(
+        &self,
+        after_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ThumbnailBook>> {
+        let conn = self.db.ro()?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {BOOK_COLUMNS} FROM THUMBNAIL_BOOK WHERE THUMBNAIL IS NOT NULL AND ID > ? ORDER BY ID LIMIT ?"
+        ))?;
+        let rows = stmt
+            .query_map(rusqlite::params![after_id, limit], Self::row_to_thumbnail)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Batch updates thumbnail rows in a single transaction, dramatically reducing fsync/WAL commits.
+    pub fn update_batch(&self, thumbnails: &[ThumbnailBook]) -> Result<u64> {
+        if thumbnails.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.db.rw()?;
+        let tx = conn.transaction()?;
+        let sets = BOOK_COLUMNS
+            .split(',')
+            .map(|c| format!("{} = ?", c.trim()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut count = 0u64;
+        {
+            let mut stmt = tx.prepare(&format!("UPDATE THUMBNAIL_BOOK SET {sets} WHERE ID = ?"))?;
+            for thumbnail in thumbnails {
+                let mut values = Self::params(&thumbnail.id, thumbnail);
+                values.push(Box::new(thumbnail.id.clone()));
+                count += stmt.execute(params_from_iter(values))? as u64;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
     pub fn all_urls(&self) -> Result<Vec<String>> {
         let conn = self.db.ro()?;
         let mut stmt = conn.prepare("SELECT URL FROM THUMBNAIL_BOOK WHERE URL IS NOT NULL")?;
@@ -475,6 +516,47 @@ impl ThumbnailSeriesDao {
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// Blob-backed rows in ID order, using index for sub-millisecond cursor pagination.
+    pub fn find_with_blob_batch_id(
+        &self,
+        after_id: &str,
+        limit: u32,
+    ) -> Result<Vec<ThumbnailSeries>> {
+        let conn = self.db.ro()?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {SERIES_COLUMNS} FROM THUMBNAIL_SERIES WHERE THUMBNAIL IS NOT NULL AND ID > ? ORDER BY ID LIMIT ?"
+        ))?;
+        let rows = stmt
+            .query_map(rusqlite::params![after_id, limit], Self::row_to_thumbnail)?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Batch updates thumbnail rows in a single transaction, dramatically reducing fsync/WAL commits.
+    pub fn update_batch(&self, thumbnails: &[ThumbnailSeries]) -> Result<u64> {
+        if thumbnails.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.db.rw()?;
+        let tx = conn.transaction()?;
+        let sets = SERIES_COLUMNS
+            .split(',')
+            .map(|c| format!("{} = ?", c.trim()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut count = 0u64;
+        {
+            let mut stmt = tx.prepare(&format!("UPDATE THUMBNAIL_SERIES SET {sets} WHERE ID = ?"))?;
+            for thumbnail in thumbnails {
+                let mut values = Self::params(&thumbnail.id, thumbnail);
+                values.push(Box::new(thumbnail.id.clone()));
+                count += stmt.execute(params_from_iter(values))? as u64;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
     }
 
     pub fn all_urls(&self) -> Result<Vec<String>> {
