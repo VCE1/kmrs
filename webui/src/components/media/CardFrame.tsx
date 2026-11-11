@@ -23,6 +23,7 @@ export function CardFrame({ to, children, className, label, actions, onLongPress
     <Link
       to={to}
       aria-label={label}
+      title={label}
       {...(onLongPress ? longPress : {})}
       className={cn(
         'group block cursor-pointer rounded-lg outline-none transition-transform duration-200 ease-out',
@@ -89,7 +90,10 @@ export function CardText({ title, overline, secondary, titleLines = 1 }: CardTex
   return (
     <div className="mt-1 min-w-0 px-1.5">
       {overline && <p className="mb-0.5 truncate text-[11px] leading-snug text-ink-3">{overline}</p>}
-      <p className={cn('text-[13px] leading-snug font-medium text-ink', titleLines === 2 ? 'line-clamp-2' : 'truncate')}>
+      <p
+        className={cn('text-[13px] leading-snug font-medium text-ink', titleLines === 2 ? 'line-clamp-2' : 'truncate')}
+        title={title}
+      >
         {title}
       </p>
       {secondary && <p className="mt-0.5 truncate text-xs text-ink-3">{secondary}</p>}
@@ -109,7 +113,10 @@ export function CardOverlayText({ title, overline, secondary, titleLines = 1, me
       )}
     >
       {overline && <p className="mb-0.5 truncate text-[11px] text-white/70">{overline}</p>}
-      <p className={cn('text-[12.5px] leading-snug font-medium text-white', titleLines === 2 ? 'line-clamp-2' : 'truncate')}>
+      <p
+        className={cn('text-[12.5px] leading-snug font-medium text-white', titleLines === 2 ? 'line-clamp-2' : 'truncate')}
+        title={title}
+      >
         {title}
       </p>
       {secondary && <p className="mt-0.5 truncate text-[11px] text-white/70">{secondary}</p>}

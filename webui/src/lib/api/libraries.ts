@@ -6,6 +6,7 @@ export const librariesApi = {
   get: (libraryId: string) => api.get<LibraryDto>(`/api/v1/libraries/${libraryId}`),
   browse: (libraryId: string, path?: string) =>
     api.get<LibraryBrowseDto>(`/api/v1/libraries/${libraryId}/browse`, path ? { path } : undefined),
+  nested: (libraryId: string) => api.get<{ nested: boolean }>(`/api/v1/libraries/${libraryId}/nested`),
 
   // Admin operations
   create: (body: LibraryCreationDto) => api.post<LibraryDto>('/api/v1/libraries', body),

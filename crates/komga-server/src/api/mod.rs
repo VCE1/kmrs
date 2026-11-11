@@ -5,6 +5,7 @@ pub mod actuator;
 #[allow(dead_code)]
 pub mod announcements;
 pub mod books;
+pub mod catalog;
 pub mod claim;
 #[allow(dead_code)]
 pub mod client_settings;

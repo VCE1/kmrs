@@ -62,4 +62,9 @@ export const seriesApi = {
   deleteFile: (seriesId: string) => api.delete<void>(`/api/v1/series/${seriesId}/file`),
   analyze: (seriesId: string) => api.post<void>(`/api/v1/series/${seriesId}/analyze`),
   refreshMetadata: (seriesId: string) => api.post<void>(`/api/v1/series/${seriesId}/metadata/refresh`),
+  moveToLibrary: (seriesId: string, libraryId: string, categoryPath?: string) =>
+    api.post<{ seriesId: string }>(`/api/v1/series/${seriesId}/library`, {
+      libraryId,
+      categoryPath,
+    }),
 }

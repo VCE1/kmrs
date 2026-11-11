@@ -29,6 +29,7 @@
     "editMetadata": "Edit metadata",
     "editBookMetadata": "Edit book metadata",
     "managePosters": "Manage posters",
+    "moveSeries": "Move to a category",
     "analyze": "Analyze",
     "refreshMetadata": "Refresh metadata",
     "identifyKomf": "Identify with komf",
@@ -38,6 +39,15 @@
     "previousBook": "Previous book",
     "nextBook": "Next book",
     "editDetails": "Edit details"
+  },
+  "moveSeries": {
+    "title": "Move to a category",
+    "body": "\"{{name}}\" has {{count}} books and moves together. A folder with one book is still a series. If the shelf has subfolders, open them and keep going while there are more. The chosen folder gains a symlink. The original file stays where it is. A shelf without subfolders moves the whole folder. The book title is then locked.",
+    "pick": "Destination",
+    "confirm": "Move",
+    "empty": "There is no other library. Create a shelf in settings first.",
+    "noCategories": "This library has no category folders.",
+    "retry": "Retry"
   },
   "toast": {
     "analysisQueued": "Analysis queued",
@@ -50,6 +60,8 @@
     "queueMatchFailed": "Could not queue the match",
     "deleteFileFailed": "Could not delete the file",
     "deleteFilesFailed": "Could not delete the files",
+    "seriesMoved": "Series moved. Titles are locked.",
+    "seriesMoveFailed": "Could not move the series",
     "removedFromCollection": "Removed from {{name}}",
     "removedFromReadList": "Removed from {{name}}",
     "collectionDeleted": "Collection deleted",

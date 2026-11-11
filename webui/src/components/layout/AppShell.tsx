@@ -18,6 +18,7 @@ import {
   FileMagnifyingGlass,
   ChartLineUp,
   Check,
+  FolderSimple,
   Funnel,
   Gauge,
   GearSix,
@@ -70,6 +71,7 @@ import { Switch } from '@/components/ui/Switch'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { PinLibrariesDialog } from '@/components/layout/PinLibrariesDialog'
 import { SidebarLibraryMenu } from '@/components/layout/SidebarLibraryMenu'
+import { CategoryLibraryItem, libraryUsesCategories } from '@/components/layout/CategoryLibraryItem'
 import { SearchScopeMenu } from '@/components/search/SearchScopeMenu'
 import { useSearchScopeDefault } from '@/components/search/scope'
 import { useChanged } from '@/lib/hooks/useChanged'
@@ -95,17 +97,18 @@ function NavItem({
     <NavLink
       to={to}
       end={end}
+      title={typeof children === 'string' ? children : undefined}
       onClick={onClick}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150',
+          'flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150 pointer-coarse:min-h-11',
           isActive ? 'bg-accent-soft font-medium text-accent-strong' : 'text-ink-2 hover:bg-raised hover:text-ink',
           actions && 'pr-9',
         )
       }
     >
       <span className="[&_svg]:size-[18px]">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span className="min-w-0 flex-1 truncate pointer-coarse:line-clamp-2 pointer-coarse:whitespace-normal">{children}</span>
     </NavLink>
   )
   if (!actions) return link
@@ -140,13 +143,14 @@ function NavGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        title={label}
         className={cn(
-          'flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors duration-150',
+          'flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] transition-colors duration-150 pointer-coarse:min-h-11',
           containsActive ? 'font-medium text-ink' : 'text-ink-2 hover:bg-raised hover:text-ink',
         )}
       >
         <span className="[&_svg]:size-[18px]">{icon}</span>
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-left pointer-coarse:line-clamp-2 pointer-coarse:whitespace-normal">{label}</span>
         <CaretRight className={cn('size-3.5 text-ink-3 transition-transform duration-150', open && 'rotate-90')} />
       </button>
       {open && <div className="mt-0.5 ml-[21px] flex flex-col gap-0.5 border-l border-line pl-1.5">{children}</div>}
@@ -177,7 +181,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <LogoMark className="size-12" />
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
+      <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-3">
         <NavItem to="/dashboard" icon={<House />} onClick={onNavigate}>
           {t('nav.dashboard')}
         </NavItem>
@@ -213,22 +217,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             )}
             {!librariesPending &&
-              visibleLibraries.map((lib) => (
-                <NavItem
-                  key={lib.id}
-                  to={`/libraries/${lib.id}/series`}
-                  icon={<BookBookmark />}
-                  onClick={onNavigate}
-                  actions={isAdmin(user) ? <SidebarLibraryMenu library={lib} /> : undefined}
-                >
-                  {lib.name}
-                </NavItem>
-              ))}
+              visibleLibraries.map((lib) =>
+                libraryUsesCategories(lib.name) ? (
+                  <CategoryLibraryItem
+                    key={lib.id}
+                    library={lib}
+                    onNavigate={onNavigate}
+                    actions={isAdmin(user) ? <SidebarLibraryMenu library={lib} /> : undefined}
+                  />
+                ) : (
+                  <NavItem
+                    key={lib.id}
+                    to={`/libraries/${lib.id}/series`}
+                    icon={<BookBookmark />}
+                    onClick={onNavigate}
+                    actions={isAdmin(user) ? <SidebarLibraryMenu library={lib} /> : undefined}
+                  >
+                    {lib.name}
+                  </NavItem>
+                ),
+              )}
             {!librariesPending && libraries?.length === 0 && (
               <p className="px-3 text-[13px] text-ink-3">{t('nav.noLibraries')}</p>
             )}
           </>
         )}
+
+        <NavItem to="/catalog" icon={<FolderSimple />} onClick={onNavigate}>
+          {t('nav.catalog')}
+        </NavItem>
 
         <div className="mt-5 mb-1.5 px-3 text-[11px] font-medium tracking-[0.08em] text-ink-3 uppercase">
           {t('nav.curated')}
@@ -692,7 +709,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh bg-bg">
       {/* desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 safe-top safe-bottom border-r border-line bg-surface lg:block">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 safe-top safe-bottom border-r border-line bg-surface md:block lg:w-64">
         <SidebarContent />
       </aside>
 
@@ -701,17 +718,17 @@ export function AppShell() {
         {drawerOpen && (
           <>
             <motion.div
-              className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+              className="fixed inset-0 z-30 bg-black/60 md:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setDrawerOpen(false)}
             />
             <motion.aside
-              className="fixed inset-y-0 left-0 z-30 w-64 safe-top safe-bottom border-r border-line bg-surface lg:hidden"
-              initial={{ x: -280 }}
+              className="fixed inset-y-0 left-0 z-30 w-[min(20rem,calc(100vw-2.75rem))] safe-top safe-bottom border-r border-line bg-surface md:hidden"
+              initial={{ x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: -280 }}
+              exit={{ x: '-100%' }}
               transition={{ type: 'spring', stiffness: 380, damping: 36 }}
             >
               <SidebarContent onNavigate={() => setDrawerOpen(false)} />
@@ -722,7 +739,7 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-15 shrink-0 box-content safe-top items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-md md:px-8">
-          <IconButton label={t('menu')} className="lg:hidden" onClick={() => setDrawerOpen(true)}>
+          <IconButton label={t('menu')} className="md:hidden" onClick={() => setDrawerOpen(true)}>
             <List className="size-5" />
           </IconButton>
           {onSearchPage ? (

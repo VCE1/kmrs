@@ -13,6 +13,7 @@ use crate::http::pagination::{QueryExt, QueryPageable};
 use crate::service::book::MarkSelectedPreference;
 use crate::state::AppState;
 use axum::extract::{Multipart, Path, State};
+use serde::{Deserialize, Serialize};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::{routing, Json, Router};
@@ -111,6 +112,24 @@ pub fn router() -> Router<AppState> {
             "/api/v1/series/{seriesId}/metadata/refresh",
             routing::post(series_refresh_metadata),
         )
+        .route(
+            "/api/v1/series/{seriesId}/library",
+            routing::post(move_series_to_library),
+        )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveSeriesLibraryDto {
+    library_id: String,
+    #[serde(default)]
+    category_path: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MoveSeriesResultDto {
+    series_id: String,
 }
 
 // region query helpers
@@ -724,6 +743,81 @@ async fn update_series_metadata(
             .send(crate::events::DomainEvent::SeriesUpdated(series));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+impl From<crate::service::placement::PlacementError> for ApiError {
+    fn from(error: crate::service::placement::PlacementError) -> Self {
+        match error {
+            crate::service::placement::PlacementError::NotFound => {
+                Self::not_found("找不到这个系列")
+            }
+            crate::service::placement::PlacementError::Rejected(message) => {
+                Self::bad_request(message)
+            }
+            crate::service::placement::PlacementError::Db(error) => Self::Internal(error.to_string()),
+            crate::service::placement::PlacementError::CrossMount => {
+                Self::bad_request("来源和目标不在同一个挂载点，移动没有完成")
+            }
+        }
+    }
+}
+
+async fn move_series_to_library(
+    State(state): State<AppState>,
+    auth: RequireAuth,
+    Path(series_id): Path<String>,
+    Json(body): Json<MoveSeriesLibraryDto>,
+) -> Result<Json<MoveSeriesResultDto>, ApiError> {
+    auth.0.require_admin()?;
+    if body.library_id.trim().is_empty() {
+        return Err(ApiError::bad_request("要选择目标库"));
+    }
+    let category = body
+        .category_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|path| !path.is_empty());
+    let outcome = match crate::service::placement::move_series_to_library(
+        &state,
+        &series_id,
+        body.library_id.trim(),
+        category,
+    ) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            tracing::info!(
+                series_id = %series_id,
+                library_id = %body.library_id,
+                category = category.unwrap_or(""),
+                error = %error,
+                "series move rejected"
+            );
+            return Err(error.into());
+        }
+    };
+    let moved_series_id = outcome.series.id.clone();
+    let books = outcome
+        .book_ids
+        .iter()
+        .filter_map(|id| match BookDao::new(state.db.clone()).find_by_id(id) {
+            Ok(book) => book,
+            Err(error) => {
+                tracing::error!(
+                    "series {moved_series_id} moved, but book {id} was not loaded: {error}"
+                );
+                None
+            }
+        })
+        .collect();
+    crate::service::placement::publish_moved(
+        &state,
+        &outcome.series,
+        books,
+        outcome.removed.as_ref(),
+    );
+    Ok(Json(MoveSeriesResultDto {
+        series_id: outcome.series.id,
+    }))
 }
 
 // endregion
@@ -2282,8 +2376,8 @@ mod tests {
 
         let dao = SeriesMetadataDao::new(state.db.clone());
         let updated = dao.find_by_id("s1").unwrap().unwrap();
-        assert_eq!(updated.title, "Berserk Deluxe");
-        assert!(updated.title_lock); // untouched by the patch
+        assert_eq!(updated.title, "Berserk");
+        assert!(updated.title_lock); // patch omitted titleLock, so the locked title stays
         assert_eq!(updated.status, SeriesStatus::Hiatus);
         assert_eq!(updated.summary, "new summary");
         assert_eq!(updated.reading_direction, None);
@@ -2328,10 +2422,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        assert_eq!(
-            dao.find_by_id("s1").unwrap().unwrap().title,
-            "Berserk Deluxe"
-        );
+        assert_eq!(dao.find_by_id("s1").unwrap().unwrap().title, "Berserk");
     }
 
     #[tokio::test]

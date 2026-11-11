@@ -169,7 +169,7 @@ export function DirectoryBrowser({ libraryId }: DirectoryBrowserProps) {
           <button
             type="button"
             onClick={() => setPath(parentPath)}
-            className="mr-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 hover:bg-raised hover:text-ink transition-colors"
+            className="mr-1 inline-flex min-h-9 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:bg-raised hover:text-ink pointer-coarse:min-h-11"
             title={t('directory.parent')}
           >
             <CaretLeft size={14} weight="bold" />
@@ -185,18 +185,19 @@ export function DirectoryBrowser({ libraryId }: DirectoryBrowserProps) {
             <div key={crumb.path || 'root'} className="inline-flex items-center gap-1.5">
               {idx > 0 && <CaretRight size={13} className="text-ink-4 shrink-0" />}
               {isLast ? (
-                <span className="flex items-center gap-1.5 font-semibold text-ink">
-                  {isRoot && <House size={15} weight="bold" className="text-accent" />}
-                  <span>{crumb.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5 font-semibold text-ink" title={crumb.name}>
+                  {isRoot && <House size={15} weight="bold" className="shrink-0 text-accent" />}
+                  <span className="break-words [overflow-wrap:anywhere]">{crumb.name}</span>
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => setPath(crumb.path)}
-                  className="flex items-center gap-1.5 font-medium text-ink-3 transition-colors hover:text-ink hover:underline cursor-pointer"
+                  title={crumb.name}
+                  className="flex min-h-9 min-w-0 cursor-pointer items-center gap-1.5 font-medium text-ink-3 transition-colors hover:text-ink hover:underline pointer-coarse:min-h-11"
                 >
-                  {isRoot && <House size={15} />}
-                  <span>{crumb.name}</span>
+                  {isRoot && <House size={15} className="shrink-0" />}
+                  <span className="break-words text-left [overflow-wrap:anywhere]">{crumb.name}</span>
                 </button>
               )}
             </div>

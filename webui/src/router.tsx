@@ -8,6 +8,7 @@ import { RootRedirect } from '@/components/layout/RootRedirect'
 import { LoginPage } from '@/routes/login'
 import { DashboardPage } from '@/routes/dashboard'
 import { DashboardSectionPage } from '@/routes/dashboard-section'
+import { CatalogPage } from '@/routes/catalog'
 import { BrowseSeriesPage } from '@/routes/browse/series'
 import { BrowseBooksPage } from '@/routes/browse/books'
 import { BrowseCollectionsPage } from '@/routes/browse/collections'
@@ -72,6 +73,8 @@ export const router = createBrowserRouter([
           { path: '/libraries/:libraryId/books', element: <LibraryBooksPage /> },
           { path: '/series', element: <BrowseSeriesPage /> },
           { path: '/books', element: <BrowseBooksPage /> },
+          { path: '/catalog', element: <CatalogPage /> },
+          { path: '/catalog/:slug', element: <CatalogPage /> },
           { path: '/collections', element: <BrowseCollectionsPage /> },
           { path: '/collections/:collectionId', element: <CollectionDetailPage /> },
           { path: '/readlists', element: <BrowseReadListsPage /> },

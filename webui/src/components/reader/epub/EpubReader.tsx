@@ -112,8 +112,17 @@ export function EpubReader({ book }: { book: BookDto }) {
       if (!nav.incognito) {
         const progression = await booksApi.progression(bookId).catch(() => undefined)
         const stored = progression?.locator ? Locator.deserialize(progression.locator) : undefined
-        if (stored)
-          initialPosition = resolvePositionLocator(alignLocatorHref(stored, publication), positions)
+        const resolved = stored
+          ? resolvePositionLocator(alignLocatorHref(stored, publication), positions)
+          : undefined
+        // Readium treats an href missing from the reading order as a finished navigation and mounts nothing.
+        if (
+          resolved &&
+          publication.readingOrder.items.some(
+            (item) => item.href.split('#')[0] === resolved.href.split('#')[0],
+          )
+        )
+          initialPosition = resolved
       }
       // server fonts are optional; a server without the fonts API degrades to publisher fonts
       const serverFonts = await fontsApi.families().catch(() => [] as string[])
