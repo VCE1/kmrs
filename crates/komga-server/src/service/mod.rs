@@ -16,6 +16,7 @@ pub mod maintenance;
 pub mod metadata;
 pub mod metrics;
 pub mod page_hash;
+pub mod placement;
 pub mod processor;
 pub mod reading_stats;
 pub mod readlist;

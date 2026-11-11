@@ -4,6 +4,7 @@ import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClie
 import { Trans, useTranslation } from 'react-i18next'
 import {
   ArrowCounterClockwise,
+  ArrowsLeftRight,
   ArrowSquareOut,
   ArrowsClockwise,
   BookOpen,
@@ -21,6 +22,7 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { seriesApi } from '@/lib/api/series'
+import { ApiError } from '@/lib/api/client'
 import { booksApi } from '@/lib/api/books'
 import { librariesApi } from '@/lib/api/libraries'
 import { komfApi } from '@/lib/api/komf'
@@ -58,6 +60,7 @@ import { Summary } from '@/components/detail/Summary'
 import { DownloadLink } from '@/components/detail/DownloadLink'
 import { AddToCollectionDialog } from '@/components/browse/AddToCollectionDialog'
 import { ConfirmDeleteDialog } from '@/components/detail/ConfirmDeleteDialog'
+import { MoveSeriesDialog } from '@/components/browse/MoveSeriesDialog'
 import { RemoveFromCollectionButton } from '@/components/detail/MembershipRemoveButton'
 import { EditSeriesDialog } from '@/components/metadata/EditSeriesDialog'
 import { PosterManager } from '@/components/metadata/PosterManager'
@@ -94,6 +97,7 @@ export function SeriesDetailPage() {
   const [identifyOpen, setIdentifyOpen] = useState(false)
   const [komfResetOpen, setKomfResetOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
   const komfReady = useKomfIntegration()
 
   const filters = useBrowseFilters('books:series', DISABLED_FILTERS)
@@ -184,6 +188,22 @@ export function SeriesDetailPage() {
       goBack('/series')
     },
     onError: (e) => showToast(e instanceof Error ? e.message : t('toast.deleteFilesFailed')),
+  })
+  const moveMutation = useMutation({
+    mutationFn: (destination: { libraryId: string; categoryPath?: string }) =>
+      seriesApi.moveToLibrary(seriesId, destination.libraryId, destination.categoryPath),
+    onSuccess: async (result) => {
+      setMoveOpen(false)
+      showToast(t('toast.seriesMoved'))
+      await queryClient.invalidateQueries({ queryKey: ['series', seriesId] })
+      await queryClient.invalidateQueries({ queryKey: ['series'] })
+      await queryClient.invalidateQueries({ queryKey: ['books'] })
+      await queryClient.invalidateQueries({ queryKey: ['libraries'] })
+      if (result?.seriesId && result.seriesId !== seriesId) {
+        navigate(`/series/${result.seriesId}`)
+      }
+    },
+    onError: (e) => showToast(e instanceof ApiError ? e.message : t('toast.seriesMoveFailed')),
   })
 
   useDocumentTitle(title || undefined)
@@ -292,6 +312,9 @@ export function SeriesDetailPage() {
                 </MenuItem>
                 <MenuItem onSelect={() => setPostersOpen(true)}>
                   <ImageSquare className="size-4" /> {t('menu.managePosters')}
+                </MenuItem>
+                <MenuItem onSelect={() => setMoveOpen(true)}>
+                  <ArrowsLeftRight className="size-4" /> {t('menu.moveSeries')}
                 </MenuItem>
                 <MenuSeparator />
                 <MenuItem onSelect={() => analyzeMutation.mutate()} disabled={analyzeMutation.isPending}>
@@ -501,6 +524,16 @@ export function SeriesDetailPage() {
         </>
       )}
       <PosterManager open={postersOpen} onClose={() => setPostersOpen(false)} kind="series" entityId={series.id} title={title} />
+      <MoveSeriesDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        name={title}
+        bookCount={series.booksCount}
+        currentLibraryId={series.libraryId}
+        libraries={librariesQuery.data ?? []}
+        loading={moveMutation.isPending}
+        onConfirm={(destination) => moveMutation.mutate(destination)}
+      />
       <ConfirmDeleteDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}

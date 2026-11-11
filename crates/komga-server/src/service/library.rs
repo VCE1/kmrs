@@ -208,6 +208,64 @@ fn repair_extensions(state: &AppState, library: &Library) -> komga_db::Result<()
     state.task_emitter.submit_many(&tasks)
 }
 
+/// Create a missing library root only when its parent already exists.
+/// Returns whether this call created the directory. Never creates more than one level,
+/// and never accepts a symlink as the root.
+pub fn prepare_library_root(root: &str) -> Result<bool, LibraryError> {
+    let path = PathBuf::from(root.trim().trim_end_matches('/'));
+    if path.as_os_str().is_empty() || !path.is_absolute() {
+        return Err(LibraryError::FileNotFound(
+            "库路径必须是绝对路径".to_string(),
+        ));
+    }
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) => {
+            if meta.file_type().is_symlink() {
+                return Err(LibraryError::DirectoryNotFound(
+                    "库根目录不能是软链接，请选择已经挂载的真实目录".to_string(),
+                ));
+            }
+            if !meta.is_dir() {
+                return Err(LibraryError::DirectoryNotFound(format!(
+                    "库根目录不是文件夹: {}",
+                    path.display()
+                )));
+            }
+            Ok(false)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty())
+            else {
+                return Err(LibraryError::FileNotFound(
+                    "不能创建盘符根目录".to_string(),
+                ));
+            };
+            let parent_meta = std::fs::symlink_metadata(parent).map_err(|_| {
+                LibraryError::FileNotFound(format!(
+                    "上级目录不存在，只创建最后一级，不会全盘扫描: {}",
+                    parent.display()
+                ))
+            })?;
+            if parent_meta.file_type().is_symlink() || !parent_meta.is_dir() {
+                return Err(LibraryError::DirectoryNotFound(
+                    "上级路径不是真实目录，没有创建文件夹".to_string(),
+                ));
+            }
+            std::fs::create_dir(&path).map_err(|error| {
+                LibraryError::FileNotFound(format!(
+                    "无法创建书架目录 {}: {error}",
+                    path.display()
+                ))
+            })?;
+            Ok(true)
+        }
+        Err(error) => Err(LibraryError::FileNotFound(format!(
+            "无法读取库路径 {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
 pub fn delete_library(state: &AppState, library: &Library) -> komga_db::Result<()> {
     tracing::info!("Deleting library: {library:?}");
     let series = SeriesDao::new(state.db.clone()).find_by_library_id(&library.id)?;
@@ -482,5 +540,27 @@ mod tests {
             .is_none());
         let event = rx.try_recv().unwrap();
         assert!(matches!(event, DomainEvent::LibraryDeleted(l) if l.id == created.id));
+    }
+
+    #[test]
+    fn prepare_library_root_creates_only_the_last_level() {
+        let dir = tempfile::tempdir().unwrap();
+        let parent = dir.path().join("杂项");
+        std::fs::create_dir(&parent).unwrap();
+        let shelf = parent.join("新书架");
+        assert!(prepare_library_root(shelf.to_str().unwrap()).unwrap());
+        assert!(shelf.is_dir());
+
+        assert!(!prepare_library_root(shelf.to_str().unwrap()).unwrap());
+
+        let missing = dir.path().join("不存在").join("再下一层");
+        let error = prepare_library_root(missing.to_str().unwrap()).unwrap_err();
+        assert!(error.is_validation());
+        assert!(!dir.path().join("不存在").exists());
+
+        let link = dir.path().join("link-root");
+        std::os::unix::fs::symlink(&parent, &link).unwrap();
+        let error = prepare_library_root(link.to_str().unwrap()).unwrap_err();
+        assert!(error.message().contains("软链接"));
     }
 }

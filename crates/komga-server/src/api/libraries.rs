@@ -5,7 +5,7 @@ use crate::dto::library::{LibraryCreationDto, LibraryUpdateDto};
 use crate::error::{ApiError, Violation};
 use crate::state::AppState;
 use axum::extract::{Path, Query, State};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use axum::http::StatusCode;
 use axum::{routing, Json, Router};
 use komga_core::dto::library::LibraryDto;
@@ -51,6 +51,33 @@ pub fn router() -> Router<AppState> {
             "/api/v1/libraries/{libraryId}/browse",
             routing::get(browse_library_directory),
         )
+        .route(
+            "/api/v1/libraries/{libraryId}/nested",
+            routing::get(library_nested),
+        )
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryNestedDto {
+    nested: bool,
+}
+
+async fn library_nested(
+    State(state): State<AppState>,
+    auth: RequireAuth,
+    Path(library_id): Path<String>,
+) -> Result<Json<LibraryNestedDto>, ApiError> {
+    let user = &auth.0.user;
+    if !user.can_access_library(&library_id) {
+        return Err(ApiError::forbidden("You don't have access to this library"));
+    }
+    let library = LibraryDao::new(state.db.clone())
+        .find_by_id(&library_id)?
+        .ok_or_else(|| ApiError::not_found("Library not found"))?;
+    let nested = crate::service::placement::library_has_nested_folders(&state, &library.id, &library.root)
+        .map_err(|error| ApiError::Internal(error.to_string()))?;
+    Ok(Json(LibraryNestedDto { nested }))
 }
 
 async fn get_libraries(
@@ -127,11 +154,20 @@ async fn add_library(
     if !violations.is_empty() {
         return Err(ApiError::Violations(violations));
     }
+    if body.name.trim() == "杂项" {
+        return Err(ApiError::bad_request(
+            "不能创建名为「杂项」的库。杂项是上级目录，请在它下面新建一个具体书架。",
+        ));
+    }
+
+    let root = body.root.trim().trim_end_matches('/').to_string();
+    let created_dir =
+        crate::service::library::prepare_library_root(&root).map_err(map_library_error)?;
 
     let library = Library {
         id: String::new(),
         name: body.name,
-        root: path_to_url(FsPath::new(&body.root)),
+        root: path_to_url(FsPath::new(&root)),
         import_comicinfo_book: body.import_comicinfo_book,
         import_comicinfo_series: body.import_comicinfo_series,
         import_comicinfo_collection: body.import_comicinfo_collection,
@@ -163,8 +199,15 @@ async fn add_library(
         last_modified_date: now_utc(),
     };
 
-    let created =
-        crate::service::library::add_library(&state, &library).map_err(map_library_error)?;
+    let created = match crate::service::library::add_library(&state, &library) {
+        Ok(created) => created,
+        Err(error) => {
+            if created_dir && error.is_validation() {
+                let _ = std::fs::remove_dir(&root);
+            }
+            return Err(map_library_error(error));
+        }
+    };
     Ok(Json(LibraryDto::of(&created, true)))
 }
 
@@ -189,6 +232,15 @@ async fn update_library_by_id(
     }
     if !violations.is_empty() {
         return Err(ApiError::Violations(violations));
+    }
+    if body
+        .name
+        .as_ref()
+        .is_some_and(|name| name.trim() == "杂项")
+    {
+        return Err(ApiError::bad_request(
+            "不能把库命名为「杂项」。杂项是上级目录，请使用下面的具体书架名。",
+        ));
     }
 
     let dao = library_dao(&state);

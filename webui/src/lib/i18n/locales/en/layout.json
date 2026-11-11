@@ -2,8 +2,10 @@
   "nav": {
     "dashboard": "Dashboard",
     "libraries": "Libraries",
+    "catalog": "Catalog",
     "pinned": "Pinned",
     "noLibraries": "No libraries yet",
+    "noCategories": "No categories under this one",
     "managePinned": "Manage pinned libraries",
     "curated": "Curated",
     "collections": "Collections",
@@ -35,6 +37,14 @@
     "reader": "Reader",
     "statistics": "Statistics",
     "signOut": "Sign out"
+  },
+  "catalog": {
+    "intro": "Main shelves can contain smaller shelves. ProgramThink stays separate. Unreviewed books stay in Pending and do not inherit the old genre libraries.",
+    "seriesCount": "{{count}} series",
+    "emptySeries": "No series in this shelf yet",
+    "prev": "Previous",
+    "next": "Next",
+    "loadFailed": "Could not load the catalog"
   },
   "menu": "Menu",
   "queuedTasks_one": "{{count}} queued task",

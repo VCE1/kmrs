@@ -2,8 +2,10 @@
   "nav": {
     "dashboard": "首页",
     "libraries": "库",
+    "catalog": "分类",
     "pinned": "已固定",
     "noLibraries": "暂无库",
+    "noCategories": "这个分类下面没有下一级",
     "managePinned": "管理固定的库",
     "curated": "精选",
     "collections": "合集",
@@ -35,6 +37,14 @@
     "reader": "阅读器",
     "statistics": "统计",
     "signOut": "退出登录"
+  },
+  "catalog": {
+    "intro": "主分类下面可以再分。编程随想是独立来源。还没复核的书留在待审核，不沿用文学名作、韩文这些旧书库名。",
+    "seriesCount": "{{count}} 个系列",
+    "emptySeries": "这一格还没有系列",
+    "prev": "上一页",
+    "next": "下一页",
+    "loadFailed": "分类没有加载出来"
   },
   "menu": "菜单",
   "queuedTasks_other": "{{count}} 个排队任务",

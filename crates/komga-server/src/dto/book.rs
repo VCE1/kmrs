@@ -72,15 +72,6 @@ pub struct BookMetadataUpdateDto {
     pub links_lock: Option<bool>,
 }
 
-macro_rules! apply_isset {
-    ($existing:expr, $field:ident, $incoming:expr) => {
-        match $incoming {
-            Some(value) => value,
-            None => $existing.$field.clone(),
-        }
-    };
-}
-
 impl BookMetadataUpdateDto {
     /// `@NullOrNotBlank` (title, number), `@NullOrBlankOrISBN`, `@Valid` on authors/links.
     pub fn violations(&self) -> Vec<Violation> {
@@ -148,29 +139,19 @@ impl BookMetadataUpdateDto {
     }
 
     /// `BookMetadataUpdateDto.patch` merge semantics.
+    /// Locked fields stay put unless this patch names that field's lock flag.
     pub fn apply_to(self, existing: &BookMetadata) -> BookMetadata {
-        BookMetadata {
-            book_id: existing.book_id.clone(),
-            title: self.title.unwrap_or_else(|| existing.title.clone()),
-            title_lock: self.title_lock.unwrap_or(existing.title_lock),
-            summary: match self.summary {
-                Some(summary) => summary.unwrap_or_default(),
-                None => existing.summary.clone(),
-            },
-            summary_lock: self.summary_lock.unwrap_or(existing.summary_lock),
-            number: self.number.unwrap_or_else(|| existing.number.clone()),
-            number_lock: self.number_lock.unwrap_or(existing.number_lock),
-            number_sort: self.number_sort.unwrap_or(existing.number_sort),
-            number_sort_lock: self.number_sort_lock.unwrap_or(existing.number_sort_lock),
-            release_date: apply_isset!(existing, release_date, self.release_date),
-            release_date_lock: self.release_date_lock.unwrap_or(existing.release_date_lock),
-            authors: match self.authors {
-                Some(authors) => authors.unwrap_or_default().iter().map(author_of).collect(),
-                None => existing.authors.clone(),
-            },
-            authors_lock: self.authors_lock.unwrap_or(existing.authors_lock),
-            notable_entities: match self.notable_entities {
-                Some(entities) => entities
+        let summary = match self.summary {
+            Some(summary) => Some(summary.unwrap_or_default()),
+            None => None,
+        };
+        let authors = match self.authors {
+            Some(authors) => Some(authors.unwrap_or_default().iter().map(author_of).collect()),
+            None => None,
+        };
+        let notable_entities = match self.notable_entities {
+            Some(entities) => Some(
+                entities
                     .unwrap_or_default()
                     .iter()
                     .map(|e| {
@@ -182,48 +163,119 @@ impl BookMetadataUpdateDto {
                         )
                     })
                     .collect(),
-                None => existing.notable_entities.clone(),
-            },
-            notable_entities_lock: self
-                .notable_entities_lock
-                .unwrap_or(existing.notable_entities_lock),
-            tags: match self.tags {
-                // Kotlin Set semantics: dedup by first occurrence
-                Some(tags) => {
-                    let mut seen = std::collections::HashSet::new();
+            ),
+            None => None,
+        };
+        let tags = match self.tags {
+            // Kotlin Set semantics: dedup by first occurrence
+            Some(tags) => {
+                let mut seen = std::collections::HashSet::new();
+                Some(
                     tags.unwrap_or_default()
                         .into_iter()
                         .filter(|t| seen.insert(t.clone()))
-                        .collect()
-                }
-                None => existing.tags.clone(),
-            },
-            tags_lock: self.tags_lock.unwrap_or(existing.tags_lock),
-            isbn: match self.isbn {
-                Some(isbn) => isbn
-                    .map(|i| i.chars().filter(char::is_ascii_digit).collect())
+                        .collect(),
+                )
+            }
+            None => None,
+        };
+        let isbn = match self.isbn {
+            Some(isbn) => Some(
+                isbn.map(|i| i.chars().filter(char::is_ascii_digit).collect())
                     .unwrap_or_default(),
-                None => existing.isbn.clone(),
-            },
-            isbn_lock: self.isbn_lock.unwrap_or(existing.isbn_lock),
-            links: apply_isset!(
-                existing,
-                links,
-                self.links.map(|links| {
-                    links
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|l| WebLink {
-                            label: l.label.expect("validated @NotBlank"),
-                            url: l.url.expect("validated @URL"),
-                        })
-                        .collect()
+            ),
+            None => None,
+        };
+        let links = self.links.map(|links| {
+            links
+                .unwrap_or_default()
+                .into_iter()
+                .map(|l| WebLink {
+                    label: l.label.expect("validated @NotBlank"),
+                    url: l.url.expect("validated @URL"),
                 })
+                .collect()
+        });
+        BookMetadata {
+            book_id: existing.book_id.clone(),
+            title: value_respecting_lock(
+                existing.title_lock,
+                self.title_lock,
+                self.title,
+                &existing.title,
+            ),
+            title_lock: self.title_lock.unwrap_or(existing.title_lock),
+            summary: value_respecting_lock(
+                existing.summary_lock,
+                self.summary_lock,
+                summary,
+                &existing.summary,
+            ),
+            summary_lock: self.summary_lock.unwrap_or(existing.summary_lock),
+            number: value_respecting_lock(
+                existing.number_lock,
+                self.number_lock,
+                self.number,
+                &existing.number,
+            ),
+            number_lock: self.number_lock.unwrap_or(existing.number_lock),
+            number_sort: value_respecting_lock(
+                existing.number_sort_lock,
+                self.number_sort_lock,
+                self.number_sort,
+                &existing.number_sort,
+            ),
+            number_sort_lock: self.number_sort_lock.unwrap_or(existing.number_sort_lock),
+            release_date: value_respecting_lock(
+                existing.release_date_lock,
+                self.release_date_lock,
+                self.release_date,
+                &existing.release_date,
+            ),
+            release_date_lock: self.release_date_lock.unwrap_or(existing.release_date_lock),
+            authors: value_respecting_lock(
+                existing.authors_lock,
+                self.authors_lock,
+                authors,
+                &existing.authors,
+            ),
+            authors_lock: self.authors_lock.unwrap_or(existing.authors_lock),
+            notable_entities: value_respecting_lock(
+                existing.notable_entities_lock,
+                self.notable_entities_lock,
+                notable_entities,
+                &existing.notable_entities,
+            ),
+            notable_entities_lock: self
+                .notable_entities_lock
+                .unwrap_or(existing.notable_entities_lock),
+            tags: value_respecting_lock(existing.tags_lock, self.tags_lock, tags, &existing.tags),
+            tags_lock: self.tags_lock.unwrap_or(existing.tags_lock),
+            isbn: value_respecting_lock(existing.isbn_lock, self.isbn_lock, isbn, &existing.isbn),
+            isbn_lock: self.isbn_lock.unwrap_or(existing.isbn_lock),
+            links: value_respecting_lock(
+                existing.links_lock,
+                self.links_lock,
+                links,
+                &existing.links,
             ),
             links_lock: self.links_lock.unwrap_or(existing.links_lock),
             created_date: existing.created_date,
             last_modified_date: existing.last_modified_date,
         }
+    }
+}
+
+fn value_respecting_lock<T: Clone>(
+    existing_locked: bool,
+    lock_in_patch: Option<bool>,
+    incoming: Option<T>,
+    existing: &T,
+) -> T {
+    if existing_locked && lock_in_patch.is_none() {
+        existing.clone()
+    } else {
+        incoming.unwrap_or_else(|| existing.clone())
     }
 }
 
@@ -309,6 +361,31 @@ mod tests {
             updated.release_date,
             Date::from_calendar_date(2020, time::Month::May, 1).ok()
         );
+    }
+
+    #[test]
+    fn locked_summary_is_not_cleared_when_lock_flag_is_absent() {
+        let mut base = base_metadata();
+        base.summary_lock = true;
+        base.title_lock = true;
+        let dto: BookMetadataUpdateDto =
+            serde_json::from_str(r#"{"summary":null,"title":"Scraped"}"#).unwrap();
+        let updated = dto.apply_to(&base);
+        assert_eq!(updated.summary, "Guts");
+        assert!(updated.summary_lock);
+        assert_eq!(updated.title, "Berserk v01");
+        assert!(updated.title_lock);
+    }
+
+    #[test]
+    fn locked_title_updates_when_patch_sends_the_lock_flag() {
+        let mut base = base_metadata();
+        base.title_lock = true;
+        let dto: BookMetadataUpdateDto =
+            serde_json::from_str(r#"{"title":"Manual","titleLock":true}"#).unwrap();
+        let updated = dto.apply_to(&base);
+        assert_eq!(updated.title, "Manual");
+        assert!(updated.title_lock);
     }
 
     #[test]

@@ -28,6 +28,7 @@
     "editMetadata": "编辑元数据",
     "editBookMetadata": "编辑书籍元数据",
     "managePosters": "管理海报",
+    "moveSeries": "移动到分类",
     "analyze": "分析",
     "refreshMetadata": "刷新元数据",
     "identifyKomf": "用 komf 识别",
@@ -37,6 +38,15 @@
     "previousBook": "上一本",
     "nextBook": "下一本",
     "editDetails": "编辑详情"
+  },
+  "moveSeries": {
+    "title": "移动到分类",
+    "body": "「{{name}}」共 {{count}} 本，会一起移动。一本单独成夹也是一个系列。目标库有子分类时，展开到具体文件夹，下面还有就继续点开。选中的文件夹里会新增软链接，原来的文件留在原地。没有子分类的书架则整夹移到那个库。移动后这本书的标题锁定。",
+    "pick": "选择目标",
+    "confirm": "移动",
+    "empty": "没有其他库可以移入。可以先在设置里新建一个书架。",
+    "noCategories": "这个库下面没有分类文件夹。",
+    "retry": "重试"
   },
   "toast": {
     "analysisQueued": "分析已加入队列",
@@ -49,6 +59,8 @@
     "queueMatchFailed": "无法将匹配加入队列",
     "deleteFileFailed": "无法删除文件",
     "deleteFilesFailed": "无法删除文件",
+    "seriesMoved": "系列已移动，标题已锁定",
+    "seriesMoveFailed": "无法移动系列",
     "removedFromCollection": "已从《{{name}}》移除",
     "removedFromReadList": "已从《{{name}}》移除",
     "collectionDeleted": "合集已删除",

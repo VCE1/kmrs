@@ -2,8 +2,10 @@
   "nav": {
     "dashboard": "儀表板",
     "libraries": "書庫",
+    "catalog": "分類",
     "pinned": "已釘選",
     "noLibraries": "還沒有書庫",
+    "noCategories": "這個分類下面沒有下一級",
     "managePinned": "管理釘選的書庫",
     "curated": "精選",
     "collections": "收藏",
@@ -35,6 +37,14 @@
     "reader": "閱讀器",
     "statistics": "統計",
     "signOut": "登出"
+  },
+  "catalog": {
+    "intro": "主分類下面可以再分。編程隨想是獨立來源。還沒複核的書留在待審核，不沿用文學名作、韓文這些舊書庫名。",
+    "seriesCount": "{{count}} 個系列",
+    "emptySeries": "這一格還沒有系列",
+    "prev": "上一頁",
+    "next": "下一頁",
+    "loadFailed": "分類沒有載入出來"
   },
   "menu": "選單",
   "queuedTasks_other": "{{count}} 個排隊任務",

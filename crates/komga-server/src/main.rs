@@ -365,6 +365,7 @@ pub fn build_router(state: AppState) -> axum::Router {
         .merge(api::series::router())
         .merge(api::books::router())
         .merge(api::collections::router())
+        .merge(api::catalog::router())
         .merge(api::readlists::router())
         .merge(api::smartlists::router())
         .merge(api::tasks::router())

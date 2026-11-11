@@ -71,11 +71,23 @@ export function alignLocatorHref(locator: Locator, publication: Publication): Lo
 
 /**
  * Other clients store progressions without locations.position, which the navigator's initial
- * position requires — snap to the closest positions entry, keeping the stored progression.
+ * position requires. Snap onto a positions entry the navigator can open, and keep the stored
+ * progression within that document.
+ *
+ * A position integer is only meaningful together with an href that is still in this spine.
+ * Re-analysis can leave a progression whose href no longer exists while its old position
+ * number still does. The navigator matches hrefs by exact string and treats a miss as a
+ * finished navigation, so returning that locator opens a blank reader.
  */
 export function resolvePositionLocator(locator: Locator, positions: Locator[]): Locator | undefined {
   const own = locator.locations.position
-  if (own !== undefined && positions.some((p) => p.locations.position === own)) return locator
+  const hrefKnown = positions.some((p) => p.href === locator.href)
+  if (
+    hrefKnown &&
+    own !== undefined &&
+    positions.some((p) => p.locations.position === own && p.href === locator.href)
+  )
+    return locator
 
   const progression = locator.locations.progression
   const sameHref = positions.filter((p) => p.href === locator.href)

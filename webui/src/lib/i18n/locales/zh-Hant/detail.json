@@ -28,6 +28,7 @@
     "editMetadata": "編輯詮釋資料",
     "editBookMetadata": "編輯書籍詮釋資料",
     "managePosters": "管理海報",
+    "moveSeries": "移動到分類",
     "analyze": "分析",
     "refreshMetadata": "重新整理詮釋資料",
     "identifyKomf": "以 komf 識別",
@@ -37,6 +38,15 @@
     "previousBook": "上一本書",
     "nextBook": "下一本書",
     "editDetails": "編輯詳細資訊"
+  },
+  "moveSeries": {
+    "title": "移動到分類",
+    "body": "「{{name}}」共 {{count}} 本，會一起移動。一本單獨成夾也是一個系列。目標庫有子分類時，展開到具體資料夾，下面還有就繼續點開。選中的資料夾裡會新增軟連結，原來的檔案留在原地。沒有子分類的書架則整夾移到那個庫。移動後這本書的標題鎖定。",
+    "pick": "選擇目標",
+    "confirm": "移動",
+    "empty": "沒有其他庫可以移入。可以先在設定裡新建一個書架。",
+    "noCategories": "這個庫下面沒有分類資料夾。",
+    "retry": "重試"
   },
   "toast": {
     "analysisQueued": "已排入分析",
@@ -49,6 +59,8 @@
     "queueMatchFailed": "無法排入比對",
     "deleteFileFailed": "無法刪除檔案",
     "deleteFilesFailed": "無法刪除檔案",
+    "seriesMoved": "系列已移動，標題已鎖定",
+    "seriesMoveFailed": "無法移動系列",
     "removedFromCollection": "已從 {{name}} 移除",
     "removedFromReadList": "已從 {{name}} 移除",
     "collectionDeleted": "收藏已刪除",

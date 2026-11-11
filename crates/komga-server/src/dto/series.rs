@@ -73,15 +73,20 @@ pub struct SeriesMetadataUpdateDto {
     pub alternate_titles_lock: Option<bool>,
 }
 
-/// `isSet` fields replace wholesale (Some(x) → x, Some(None) → cleared); absent fields keep the
-/// existing value. Plain fields merge with `?:`.
-macro_rules! apply_isset {
-    ($existing:expr, $field:ident, $incoming:expr) => {
-        match $incoming {
-            Some(value) => value,
-            None => $existing.$field.clone(),
-        }
-    };
+/// A locked field keeps its stored value when the patch does not mention that lock.
+/// The metadata editor sends the lock flag together with the new value, so a manual
+/// edit still applies. A scraper that only sends the value cannot clear the lock.
+fn value_respecting_lock<T: Clone>(
+    existing_locked: bool,
+    lock_in_patch: Option<bool>,
+    incoming: Option<T>,
+    existing: &T,
+) -> T {
+    if existing_locked && lock_in_patch.is_none() {
+        existing.clone()
+    } else {
+        incoming.unwrap_or_else(|| existing.clone())
+    }
 }
 
 impl SeriesMetadataUpdateDto {
@@ -154,73 +159,130 @@ impl SeriesMetadataUpdateDto {
     }
 
     /// `SeriesController.updateSeriesMetadata` merge semantics.
+    /// Locked fields stay put unless this patch names that field's lock flag.
     pub fn apply_to(self, existing: &SeriesMetadata) -> SeriesMetadata {
+        let genres = self.genres.map(|g| g.unwrap_or_default());
+        let tags = self.tags.map(|t| t.unwrap_or_default());
+        let sharing_labels = self.sharing_labels.map(|s| s.unwrap_or_default());
+        let links = self.links.map(|links| {
+            links
+                .unwrap_or_default()
+                .into_iter()
+                .map(|l| WebLink {
+                    label: l.label.expect("validated @NotBlank"),
+                    url: l.url.expect("validated @URL"),
+                })
+                .collect()
+        });
+        let alternate_titles = self.alternate_titles.map(|titles| {
+            titles
+                .unwrap_or_default()
+                .into_iter()
+                .map(|t| AlternateTitle {
+                    label: t.label.expect("validated @NotBlank"),
+                    title: t.title.expect("validated @NotBlank"),
+                })
+                .collect()
+        });
         SeriesMetadata {
             series_id: existing.series_id.clone(),
-            status: self.status.unwrap_or(existing.status),
+            status: value_respecting_lock(
+                existing.status_lock,
+                self.status_lock,
+                self.status,
+                &existing.status,
+            ),
             status_lock: self.status_lock.unwrap_or(existing.status_lock),
-            title: self.title.unwrap_or_else(|| existing.title.clone()),
+            title: value_respecting_lock(
+                existing.title_lock,
+                self.title_lock,
+                self.title,
+                &existing.title,
+            ),
             title_lock: self.title_lock.unwrap_or(existing.title_lock),
-            title_sort: self
-                .title_sort
-                .unwrap_or_else(|| existing.title_sort.clone()),
+            title_sort: value_respecting_lock(
+                existing.title_sort_lock,
+                self.title_sort_lock,
+                self.title_sort,
+                &existing.title_sort,
+            ),
             title_sort_lock: self.title_sort_lock.unwrap_or(existing.title_sort_lock),
-            summary: self.summary.unwrap_or_else(|| existing.summary.clone()),
+            summary: value_respecting_lock(
+                existing.summary_lock,
+                self.summary_lock,
+                self.summary,
+                &existing.summary,
+            ),
             summary_lock: self.summary_lock.unwrap_or(existing.summary_lock),
-            language: self.language.unwrap_or_else(|| existing.language.clone()),
+            language: value_respecting_lock(
+                existing.language_lock,
+                self.language_lock,
+                self.language,
+                &existing.language,
+            ),
             language_lock: self.language_lock.unwrap_or(existing.language_lock),
-            reading_direction: apply_isset!(existing, reading_direction, self.reading_direction),
+            reading_direction: value_respecting_lock(
+                existing.reading_direction_lock,
+                self.reading_direction_lock,
+                self.reading_direction,
+                &existing.reading_direction,
+            ),
             reading_direction_lock: self
                 .reading_direction_lock
                 .unwrap_or(existing.reading_direction_lock),
-            publisher: self.publisher.unwrap_or_else(|| existing.publisher.clone()),
+            publisher: value_respecting_lock(
+                existing.publisher_lock,
+                self.publisher_lock,
+                self.publisher,
+                &existing.publisher,
+            ),
             publisher_lock: self.publisher_lock.unwrap_or(existing.publisher_lock),
-            age_rating: apply_isset!(existing, age_rating, self.age_rating),
+            age_rating: value_respecting_lock(
+                existing.age_rating_lock,
+                self.age_rating_lock,
+                self.age_rating,
+                &existing.age_rating,
+            ),
             age_rating_lock: self.age_rating_lock.unwrap_or(existing.age_rating_lock),
-            genres: apply_isset!(existing, genres, self.genres.map(|g| g.unwrap_or_default())),
+            genres: value_respecting_lock(
+                existing.genres_lock,
+                self.genres_lock,
+                genres,
+                &existing.genres,
+            ),
             genres_lock: self.genres_lock.unwrap_or(existing.genres_lock),
-            tags: apply_isset!(existing, tags, self.tags.map(|t| t.unwrap_or_default())),
+            tags: value_respecting_lock(existing.tags_lock, self.tags_lock, tags, &existing.tags),
             tags_lock: self.tags_lock.unwrap_or(existing.tags_lock),
-            total_book_count: apply_isset!(existing, total_book_count, self.total_book_count),
+            total_book_count: value_respecting_lock(
+                existing.total_book_count_lock,
+                self.total_book_count_lock,
+                self.total_book_count,
+                &existing.total_book_count,
+            ),
             total_book_count_lock: self
                 .total_book_count_lock
                 .unwrap_or(existing.total_book_count_lock),
-            sharing_labels: apply_isset!(
-                existing,
+            sharing_labels: value_respecting_lock(
+                existing.sharing_labels_lock,
+                self.sharing_labels_lock,
                 sharing_labels,
-                self.sharing_labels.map(|s| s.unwrap_or_default())
+                &existing.sharing_labels,
             ),
             sharing_labels_lock: self
                 .sharing_labels_lock
                 .unwrap_or(existing.sharing_labels_lock),
-            links: apply_isset!(
-                existing,
+            links: value_respecting_lock(
+                existing.links_lock,
+                self.links_lock,
                 links,
-                self.links.map(|links| {
-                    links
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|l| WebLink {
-                            label: l.label.expect("validated @NotBlank"),
-                            url: l.url.expect("validated @URL"),
-                        })
-                        .collect()
-                })
+                &existing.links,
             ),
             links_lock: self.links_lock.unwrap_or(existing.links_lock),
-            alternate_titles: apply_isset!(
-                existing,
+            alternate_titles: value_respecting_lock(
+                existing.alternate_titles_lock,
+                self.alternate_titles_lock,
                 alternate_titles,
-                self.alternate_titles.map(|titles| {
-                    titles
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|t| AlternateTitle {
-                            label: t.label.expect("validated @NotBlank"),
-                            title: t.title.expect("validated @NotBlank"),
-                        })
-                        .collect()
-                })
+                &existing.alternate_titles,
             ),
             alternate_titles_lock: self
                 .alternate_titles_lock
@@ -341,6 +403,34 @@ mod tests {
         assert_eq!(updated.status, SeriesStatus::Hiatus);
         // summary is not isSet-tracked: explicit null keeps the old value
         assert_eq!(updated.summary, "Guts");
+    }
+
+    #[test]
+    fn locked_fields_stay_when_patch_omits_the_lock_flag() {
+        let mut base = base_metadata();
+        base.title_lock = true;
+        base.summary_lock = true;
+        let dto: SeriesMetadataUpdateDto = serde_json::from_str(
+            r#"{"title":"Scraped","summary":"scraped summary","status":"HIATUS"}"#,
+        )
+        .unwrap();
+        let updated = dto.apply_to(&base);
+        assert_eq!(updated.title, "Berserk");
+        assert!(updated.title_lock);
+        assert_eq!(updated.summary, "Guts");
+        assert!(updated.summary_lock);
+        assert_eq!(updated.status, SeriesStatus::Hiatus);
+    }
+
+    #[test]
+    fn locked_title_updates_when_patch_sends_the_lock_flag() {
+        let mut base = base_metadata();
+        base.title_lock = true;
+        let dto: SeriesMetadataUpdateDto =
+            serde_json::from_str(r#"{"title":"Manual","titleLock":true}"#).unwrap();
+        let updated = dto.apply_to(&base);
+        assert_eq!(updated.title, "Manual");
+        assert!(updated.title_lock);
     }
 
     #[test]

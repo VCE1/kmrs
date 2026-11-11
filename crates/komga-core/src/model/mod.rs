@@ -1,6 +1,7 @@
 //! Domain models, corresponding to komga's `domain/model`.
 
 pub mod book;
+pub mod catalog;
 pub mod book_projection;
 pub mod collection;
 pub mod common;
