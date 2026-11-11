@@ -424,11 +424,19 @@ pub fn delete_thumbnail_for_book(
 pub fn get_thumbnail(state: &AppState, book_id: &str) -> komga_db::Result<Option<ThumbnailBook>> {
     let dao = ThumbnailBookDao::new(state.db.clone());
     let selected = dao.find_selected_by_book_id(book_id)?;
-    if selected.as_ref().is_some_and(thumbnail_exists) {
-        return Ok(selected);
+    if let Some(selected) = selected {
+        if thumbnail_exists(&selected) {
+            return Ok(Some(selected));
+        }
+        thumbnails_house_keeping(state, book_id)?;
+        return dao.find_selected_by_book_id(book_id);
     }
-    thumbnails_house_keeping(state, book_id)?;
-    dao.find_selected_by_book_id(book_id)
+    let all = dao.find_all_by_book_id(book_id)?;
+    if !all.is_empty() {
+        thumbnails_house_keeping(state, book_id)?;
+        return dao.find_selected_by_book_id(book_id);
+    }
+    Ok(None)
 }
 
 pub(crate) fn thumbnail_bytes(

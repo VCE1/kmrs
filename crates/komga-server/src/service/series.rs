@@ -403,13 +403,19 @@ pub fn get_selected_thumbnail(
 ) -> Result<Option<ThumbnailSeries>> {
     let dao = ThumbnailSeriesDao::new(state.db.clone());
     let selected = dao.find_selected_by_series_id(series_id)?;
-    // URL-backed rows exist for every type in file storage mode, not just sidecars
-    // (Java only has URLs on sidecars, so its check is sidecar-scoped)
-    if selected.as_ref().is_some_and(thumbnail_exists) {
-        return Ok(selected);
+    if let Some(selected) = selected {
+        if thumbnail_exists(&selected) {
+            return Ok(Some(selected));
+        }
+        thumbnails_house_keeping(state, series_id)?;
+        return dao.find_selected_by_series_id(series_id);
     }
-    thumbnails_house_keeping(state, series_id)?;
-    dao.find_selected_by_series_id(series_id)
+    let all = dao.find_all_by_series_id(series_id)?;
+    if !all.is_empty() {
+        thumbnails_house_keeping(state, series_id)?;
+        return dao.find_selected_by_series_id(series_id);
+    }
+    Ok(None)
 }
 
 /// Row-level resolution behind `get_thumbnail_bytes`: the selected series thumbnail,

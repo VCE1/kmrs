@@ -506,6 +506,8 @@ mod tests {
     use crate::api::libraries::test_support::{insert_api_key, insert_library, insert_user, TestApp};
     use axum::http::{Request, StatusCode};
     use axum::body::Body;
+    use komga_core::model::series::Series;
+    use komga_core::time_codec::now_utc;
 
     fn app() -> TestApp {
         TestApp::new(router())

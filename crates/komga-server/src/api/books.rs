@@ -599,15 +599,19 @@ fn thumbnails_house_keeping(state: &AppState, book_id: &str) -> Result<(), ApiEr
 fn get_thumbnail(state: &AppState, book_id: &str) -> Result<Option<ThumbnailBook>, ApiError> {
     let dao = thumbnail_dao(state);
     let selected = dao.find_selected_by_book_id(book_id)?;
-    let needs_housekeeping = match &selected {
-        Some(t) => !thumbnail_exists(t),
-        None => true,
-    };
-    if needs_housekeeping {
+    if let Some(t) = selected {
+        if thumbnail_exists(&t) {
+            return Ok(Some(t));
+        }
         thumbnails_house_keeping(state, book_id)?;
         return Ok(dao.find_selected_by_book_id(book_id)?);
     }
-    Ok(selected)
+    let all = dao.find_all_by_book_id(book_id)?;
+    if !all.is_empty() {
+        thumbnails_house_keeping(state, book_id)?;
+        return Ok(dao.find_selected_by_book_id(book_id)?);
+    }
+    Ok(None)
 }
 
 /// `BookLifecycle.getBytesFromThumbnailBook`: blob first, then sidecar file

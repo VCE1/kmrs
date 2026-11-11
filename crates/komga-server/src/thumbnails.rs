@@ -114,6 +114,7 @@ trait BlobThumbnail {
     fn media_type(&self) -> &str;
     fn take_blob(&mut self) -> Option<Vec<u8>>;
     fn set_url(&mut self, url: String);
+    fn url(&self) -> Option<&str>;
 }
 
 impl BlobThumbnail for ThumbnailBook {
@@ -129,6 +130,9 @@ impl BlobThumbnail for ThumbnailBook {
     fn set_url(&mut self, url: String) {
         self.url = Some(url);
     }
+    fn url(&self) -> Option<&str> {
+        self.url.as_deref()
+    }
 }
 
 impl BlobThumbnail for ThumbnailSeries {
@@ -143,6 +147,9 @@ impl BlobThumbnail for ThumbnailSeries {
     }
     fn set_url(&mut self, url: String) {
         self.url = Some(url);
+    }
+    fn url(&self) -> Option<&str> {
+        self.url.as_deref()
     }
 }
 
@@ -256,7 +263,16 @@ fn migrate_kind<T: BlobThumbnail + Clone>(
         }
         if !to_update.is_empty() {
             match update_batch(&to_update) {
-                Ok(n) => migrated += n,
+                Ok(n) => {
+                    migrated += n;
+                    if n == 0 {
+                        for t in &to_update {
+                            if let Some(url) = t.url() {
+                                let _ = remove_url_if_managed(dir, url);
+                            }
+                        }
+                    }
+                }
                 Err(e) => {
                     tracing::warn!("could not batch update {} thumbnails: {e}", kind.as_str())
                 }
@@ -524,17 +540,15 @@ mod tests {
         }
     }
 
-    /// Serves `rows` on the first fetch, then an empty batch.
-    fn fetch_once<T: Clone>(
-        rows: Vec<(i64, T)>,
-    ) -> impl FnMut(i64, u32) -> komga_db::Result<Vec<(i64, T)>> {
-        let mut served = false;
+    /// Serves batches on consecutive calls, then empty batches.
+    fn fetch_batches<T: Clone>(
+        mut batches: Vec<Vec<T>>,
+    ) -> impl FnMut(&str, u32) -> komga_db::Result<Vec<T>> {
         move |_, _| {
-            if served {
+            if batches.is_empty() {
                 Ok(vec![])
             } else {
-                served = true;
-                Ok(rows.clone())
+                Ok(batches.remove(0))
             }
         }
     }
@@ -548,7 +562,7 @@ mod tests {
             dir.path(),
             ThumbnailKind::Book,
             &markers,
-            fetch_once(vec![(1, blob_row("b1", "t1", vec![1]))]),
+            fetch_batches(vec![vec![blob_row("b1", "t1", vec![1])]]),
             |_| Ok(0),
         )
         .unwrap();
@@ -568,15 +582,15 @@ mod tests {
             dir.path(),
             ThumbnailKind::Book,
             &markers,
-            fetch_once(vec![
-                (1, blob_row("b1", "t1", vec![1])),
-                (2, blob_row("b1", "t2", vec![2])),
+            fetch_batches(vec![
+                vec![blob_row("b1", "t1", vec![1])],
+                vec![blob_row("b1", "t2", vec![2])],
             ]),
-            |thumbnail| {
-                if thumbnail.id() == "t1" {
+            |batch| {
+                if batch.iter().any(|t| t.id == "t1") {
                     Err(komga_db::Error::EnumValue("boom".into()))
                 } else {
-                    Ok(1)
+                    Ok(batch.len() as u64)
                 }
             },
         )
