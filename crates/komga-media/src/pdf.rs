@@ -89,17 +89,28 @@ pub fn pdf_available() -> bool {
 }
 
 fn load(pdfium: &'static Pdfium, path: &Path) -> Result<PdfDocument<'static>> {
-    // opened here rather than `load_pdf_from_file` so a missing file maps to NoSuchFile
-    let file = std::fs::File::open(path).map_err(|e| {
+    if !path.exists() {
+        return Err(MediaError::NoSuchFile(path.display().to_string()));
+    }
+    let mut bytes = std::fs::read(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             MediaError::NoSuchFile(path.display().to_string())
         } else {
             MediaError::unsupported(format!("could not open pdf document: {e}"))
         }
     })?;
+    if bytes.starts_with(b"\xef\xbb\xbf") {
+        bytes.drain(..3);
+    }
+    // Try opening without password first, fallback to empty string password for owner-protected PDFs.
+    let bytes_clone = bytes.clone();
     pdfium
-        .load_pdf_from_reader(file, None)
-        .map_err(|e| MediaError::unsupported(format!("could not open pdf document: {e}")))
+        .load_pdf_from_byte_vec(bytes, None)
+        .or_else(|_| pdfium.load_pdf_from_byte_vec(bytes_clone, Some("")))
+        .map_err(|e| {
+            tracing::error!("load_pdf_from_byte_vec failed for {}: {e:?}", path.display());
+            MediaError::unsupported(format!("could not open pdf document: {e:?}"))
+        })
 }
 
 /// Opens a document without entering the render cache; for one-shot consumers.
