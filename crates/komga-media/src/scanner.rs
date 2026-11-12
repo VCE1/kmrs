@@ -399,37 +399,34 @@ fn walk_dir(ctx: &mut WalkContext, dir: &Path, ancestors: &mut Vec<PathBuf>) {
             }
         };
 
-        if link_meta.file_type().is_symlink() {
+        let meta = if link_meta.file_type().is_symlink() {
             // path.is_dir() follows the link and returns false on any error, silently
             // skipping a mount whose target is unreachable; match metadata instead so a
             // transient hiccup protects the rows under the link rather than soft-deleting them
             match std::fs::metadata(&path) {
-                Ok(m) if m.is_dir() => walk_dir(ctx, &path, ancestors),
-                Ok(_) => {} // symlink to a non-directory: ignored, as before
+                Ok(m) if m.is_dir() => {
+                    walk_dir(ctx, &path, ancestors);
+                    continue;
+                }
+                Ok(m) if m.is_file() => m,
+                Ok(_) => continue, // symlink to another special device or FIFO: ignored
                 Err(_) => {
                     tracing::warn!("Could not access: {}", path.display());
                     // The symlink target is unreachable: its contents are unknown.
                     record_failed_directory(ctx, &path);
+                    continue;
                 }
             }
-            continue;
-        }
-        if link_meta.is_dir() {
+        } else if link_meta.is_dir() {
             walk_dir(ctx, &path, ancestors);
             continue;
-        }
-
-        // visitFile: anything that is not a symlink and not a directory
-        let file_name = entry.file_name().to_string_lossy().into_owned();
-        let meta = match std::fs::metadata(&path) {
-            Ok(m) => m,
-            Err(_) => {
-                tracing::warn!("Could not access: {}", path.display());
-                // The file's state is unknown: protect this exact path.
-                record_failed_directory(ctx, &path);
-                continue;
-            }
+        } else {
+            // regular file: metadata is link_meta
+            link_meta
         };
+
+        // visitFile: anything that is a file (regular or symlinked)
+        let file_name = entry.file_name().to_string_lossy().into_owned();
 
         let ext = path
             .extension()
